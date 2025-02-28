@@ -26,6 +26,18 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 class ChatRequest(BaseModel):
     message: str
 
+# 獲取股票價格
+@app.get('/stockprice/<ticker>')
+def get_stock_price(ticker):
+    stock = yf.Ticker(ticker)
+    data = stock.history(period='1d')
+    if not data.empty:
+        price = data['Close'].iloc[-1]
+        premarket = stock.info.get('preMarketPrice', 'N/A')
+        return jsonify({'ticker': ticker, 'price': price, 'premarket': premarket})
+    else:
+        return jsonify({'error': 'No data found for ticker: {}'.format(ticker)}), 404    
+
 # 獲取股票數據（含歷史數據供圖表使用）
 @app.get("/stock/{symbol}")
 async def get_stock(symbol: str):
@@ -41,20 +53,72 @@ async def get_stock(symbol: str):
         "history": prices
     }
 
-# 自動完成建議（使用 yahooquery 搜尋多市場股票）
+# 自動完成建議（使用 yfinance 搜尋多市場股票）
 @app.get("/autocomplete/{query}")
 async def autocomplete(query: str):
     try:
-        search = yq.search(query, quotes=True, news=False, country="global")
+        # 將查詢轉換為大寫，以提高搜尋準確性
+        query = query.upper()
+        
+        # 記錄查詢日誌
+        print(f"Autocomplete query: {query}")
+        
+        # 使用 yfinance 的 Ticker 方法搜尋股票
         suggestions = []
-        if "quotes" in search:
-            for quote in search["quotes"]:
-                symbol = quote.get("symbol", "")
-                name = quote.get("shortname", "") or quote.get("longname", "")
-                if symbol.endswith(".TW") or not symbol.endswith((".HK", ".SS", ".SZ", ".O", ".TW")) or symbol.endswith(".HK") or symbol.endswith(".SS") or symbol.endswith(".SZ"):
-                    suggestions.append({"name": name, "symbol": symbol})
+        
+        # 嘗試直接搜尋股票代號
+        try:
+            stock = yf.Ticker(query)
+            info = stock.info
+            
+            if info and 'symbol' in info:
+                symbol = info.get('symbol', '')
+                name = info.get('longName', '') or info.get('shortName', '')
+                
+                # 篩選條件：
+                # 1. 符號不為空
+                # 2. 包含常見市場：美股、台股、港股、中國股市
+                if symbol and (
+                    symbol.endswith(".TW") or  # 台灣股市
+                    symbol.endswith(".HK") or  # 香港股市
+                    symbol.endswith((".SS", ".SZ")) or  # 上海、深圳股市
+                    not symbol.endswith((".O", ".N"))  # 其他市場，如納斯達克、紐約證券交易所
+                ):
+                    suggestions.append({
+                        "name": name, 
+                        "symbol": symbol
+                    })
+        except Exception as e:
+            print(f"Direct symbol search error: {e}")
+        
+        # 如果直接搜尋失敗，嘗試使用模糊搜尋
+        if not suggestions:
+            # 使用 yfinance 下載市場數據作為搜尋基礎
+            market_data = yf.download(query, period="1d")
+            
+            if not market_data.empty:
+                symbol = market_data.index[0]
+                stock = yf.Ticker(symbol)
+                info = stock.info
+                
+                if info and 'symbol' in info:
+                    name = info.get('longName', '') or info.get('shortName', '')
+                    suggestions.append({
+                        "name": name, 
+                        "symbol": symbol
+                    })
+        
+        # 記錄建議結果
+        print(f"Suggestions: {suggestions}")
+        
+        # 返回前 5 個建議
         return {"suggestions": suggestions[:5]}
+    
     except Exception as e:
+        # 記錄詳細錯誤
+        print(f"Autocomplete error: {e}")
+        import traceback
+        traceback.print_exc()
         return {"suggestions": [], "error": str(e)}
 
 # 對話式 AI 查詢（使用 Gemini API）

@@ -27,22 +27,36 @@ async function fetchSuggestions() {
         document.getElementById("suggestions").style.display = "none";
         return;
     }
-    const response = await fetch(`/autocomplete/${query}`);
-    const data = await response.json();
-    const suggestionsDiv = document.getElementById("suggestions");
-    suggestionsDiv.innerHTML = "";
-    data.suggestions.forEach(item => {
-        const div = document.createElement("div");
-        div.textContent = `${item.name} (${item.symbol})`;
-        div.onclick = () => {
-            document.getElementById("symbol").value = item.name;
-            selectedSymbol = item.symbol; // 儲存代碼
-            suggestionsDiv.style.display = "none";
-            fetchStock(); // 自動查詢
-        };
-        suggestionsDiv.appendChild(div);
-    });
-    suggestionsDiv.style.display = "block";
+    try {
+        const response = await fetch(`/autocomplete/${query}`);
+        const data = await response.json();
+        const suggestionsDiv = document.getElementById("suggestions");
+        suggestionsDiv.innerHTML = "";
+        
+        // 如果沒有建議，顯示提示
+        if (data.suggestions.length === 0) {
+            const noResultDiv = document.createElement("div");
+            noResultDiv.textContent = "找不到相符的股票";
+            noResultDiv.style.color = "gray";
+            suggestionsDiv.appendChild(noResultDiv);
+        } else {
+            data.suggestions.forEach(item => {
+                const div = document.createElement("div");
+                div.textContent = `${item.name} (${item.symbol})`;
+                div.onclick = () => {
+                    document.getElementById("symbol").value = item.symbol; // 設定為股票代號
+                    selectedSymbol = item.symbol; // 儲存代碼
+                    suggestionsDiv.style.display = "none";
+                    fetchStock(); // 自動查詢
+                };
+                suggestionsDiv.appendChild(div);
+            });
+        }
+        
+        suggestionsDiv.style.display = "block";
+    } catch (error) {
+        console.error("Autocomplete error:", error);
+    }
 }
 
 async function fetchStock() {

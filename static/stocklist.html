@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MyStock</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+body { background-color: #0A0C10; color: #fff; width: 375px; margin: 0 auto; }
+.stock-item { transition: all 0.3s ease; }
+.stock-item:active { transform: scale(0.98); }
+.price-up { color: #22C55E; }
+.price-down { color: #EF4444; }
+.nav-active { color: #60A5FA; }
+</style>
+<script>
+tailwind.config = {
+theme: {
+extend: {
+colors: {
+primary: '#60A5FA',
+secondary: '#1E293B'
+},
+borderRadius: {
+'none': '0px',
+'sm': '4px',
+DEFAULT: '8px',
+'md': '12px',
+'lg': '16px',
+'xl': '20px',
+'2xl': '24px',
+'3xl': '32px',
+'full': '9999px',
+'button': '8px'
+}
+}
+}
+}
+</script>
+</head>
+<body class="pb-[72px]">
+<header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+<div class="flex items-center justify-between px-4 h-14">
+<h1 class="text-lg font-medium">MyStock</h1>
+<div class="flex items-center gap-4">
+<button class="w-8 h-8 flex items-center justify-center" onclick="toggleChatWindow()">
+<i class="ri-message-3-line text-xl"></i>
+</button>
+<div id="messageModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+<div class="bg-[#0A0C10] w-[90%] max-w-md rounded-lg absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-lg font-medium">消息中心</h3>
+<button onclick="toggleMessageModal()" class="w-8 h-8 flex items-center justify-center">
+<i class="ri-close-line text-xl"></i>
+</button>
+</div>
+<div class="space-y-4">
+<div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
+<div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+<i class="ri-notification-4-line text-xl"></i>
+</div>
+<div>
+<div class="font-medium mb-1">系統通知</div>
+<div class="text-sm text-gray-400">PLTR 已突破前高位置，建議關注</div>
+<div class="text-xs text-gray-500 mt-1">2025-02-28 13:05</div>
+</div>
+</div>
+<div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
+<div class="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center shrink-0">
+<i class="ri-line-chart-line text-xl"></i>
+</div>
+<div>
+<div class="font-medium mb-1">價格提醒</div>
+<div class="text-sm text-gray-400">SMCI 已達到您設置的目標價格</div>
+<div class="text-xs text-gray-500 mt-1">2025-02-28 12:30</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+function toggleMessageModal() {
+const modal = document.getElementById('messageModal');
+modal.classList.toggle('hidden');
+}
+function toggleChatWindow() {
+const chatWindow = document.getElementById('chatWindow');
+const mainContent = document.querySelector('main');
+chatWindow.classList.toggle('hidden');
+mainContent.classList.toggle('mt-[340px]');
+mainContent.classList.toggle('mt-14');
+}
+</script>
+<button class="w-8 h-8 flex items-center justify-center" onclick="toggleSettingsPage()">
+<i class="ri-settings-3-line text-xl"></i>
+</button>
+<div id="settingsPage" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
+<div class="h-full overflow-y-auto">
+<header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+<div class="flex items-center px-4 h-14">
+<button class="w-8 h-8 flex items-center justify-center mr-2" onclick="toggleSettingsPage()">
+<i class="ri-arrow-left-line text-xl"></i>
+</button>
+<h1 class="text-lg font-medium">設置</h1>
+</div>
+</header>
+<main class="mt-14 px-4">
+<div class="flex items-center gap-3 p-4 bg-secondary rounded-lg mb-6">
+<div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-medium">
+J
+</div>
+<div>
+<div class="font-medium">John Smith</div>
+<div class="text-sm text-gray-400">john.smith@gmail.com</div>
+</div>
+</div>
+<div class="mb-4">
+<h2 class="text-lg font-medium mb-3">自選股票</h2>
+<div class="space-y-3" id="watchlist">
+</div>
+</div>
+</main>
+</div>
+</div>
+<script>
+function toggleSettingsPage() {
+const settingsPage = document.getElementById('settingsPage');
+settingsPage.classList.toggle('hidden');
+}
+const watchlistStocks = [...mockStocks];
+function renderWatchlist() {
+const watchlist = document.getElementById('watchlist');
+watchlist.innerHTML = watchlistStocks.map((stock, index) => `
+<div class="flex items-center gap-3 p-4 bg-secondary rounded-lg" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event)" data-index="${index}">
+<div class="flex items-center gap-3 flex-1">
+<i class="ri-drag-move-line text-gray-500"></i>
+<div class="w-10 h-10 rounded-full ${stock.color} flex items-center justify-center text-white font-medium">
+${stock.symbol[0]}
+</div>
+<div>
+<div class="font-medium">${stock.symbol}</div>
+<div class="text-sm text-gray-400">${stock.name}</div>
+</div>
+</div>
+<button class="w-8 h-8 flex items-center justify-center" onclick="removeStock(${index})">
+<i class="ri-delete-bin-line text-gray-500"></i>
+</button>
+</div>
+`).join('');
+}
+function removeStock(index) {
+watchlistStocks.splice(index, 1);
+renderWatchlist();
+}
+let draggedItemIndex = null;
+function dragStart(e) {
+draggedItemIndex = e.target.dataset.index;
+e.target.classList.add('opacity-50');
+}
+function dragOver(e) {
+e.preventDefault();
+}
+function drop(e) {
+e.preventDefault();
+const dropIndex = e.target.closest('[data-index]').dataset.index;
+const itemToMove = watchlistStocks[draggedItemIndex];
+watchlistStocks.splice(draggedItemIndex, 1);
+watchlistStocks.splice(dropIndex, 0, itemToMove);
+renderWatchlist();
+}
+renderWatchlist();
+</script>
+</div>
+</div>
+<div id="chatWindow" class="hidden fixed top-14 left-0 w-full bg-[#0A0C10] border-b border-gray-800 z-40 transition-all duration-300">
+<div class="p-4">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-lg font-medium">AI 助理</h3>
+<button onclick="toggleChatWindow()" class="w-8 h-8 flex items-center justify-center">
+<i class="ri-close-line text-xl"></i>
+</button>
+</div>
+<div class="space-y-4 h-[240px] overflow-y-auto">
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+<i class="ri-robot-line"></i>
+</div>
+<div class="flex-1 bg-secondary rounded-lg p-3">
+<p class="text-sm">您好！我是您的智能投資助理。我可以為您分析市場趨勢、提供投資建議，以及回答任何與投資相關的問題。</p>
+</div>
+</div>
+<div class="flex items-start gap-3 justify-end">
+<div class="flex-1 bg-primary bg-opacity-10 rounded-lg p-3">
+<p class="text-sm">請幫我分析一下 PLTR 的走勢</p>
+</div>
+<div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center shrink-0">
+<i class="ri-user-line"></i>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+<i class="ri-robot-line"></i>
+</div>
+<div class="flex-1 bg-secondary rounded-lg p-3">
+<p class="text-sm">根據最新數據，PLTR 目前處於上升趨勢，已突破前期高點。技術指標顯示超買，建議關注回調機會。短期支撐位在 80 美元附近。</p>
+</div>
+</div>
+</div>
+<div class="mt-4 flex gap-2">
+<input type="text" placeholder="輸入您的問題..." class="flex-1 bg-secondary rounded-lg px-4 py-2 text-sm focus:outline-none">
+<button class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+<i class="ri-send-plane-line"></i>
+</button>
+</div>
+</div>
+</div>
+</header>
+<main class="mt-14 px-4 transition-all duration-300">
+<div class="space-y-3" id="stockList">
+</div>
+</main>
+<div class="fixed bottom-0 w-full bg-[#0A0C10] border-t border-gray-800">
+<div class="px-4 py-2 flex items-center bg-secondary rounded-lg mx-4 my-2">
+<i class="ri-search-line text-gray-400 mr-2"></i>
+<input type="text" id="searchInput" placeholder="納斯達克 18,544.42 -2.78%" class="bg-transparent flex-1 text-sm focus:outline-none">
+<button class="w-8 h-8 flex items-center justify-center">
+<i class="ri-mic-line text-gray-400"></i>
+</button>
+</div>
+<div id="searchResults" class="hidden mx-4 mb-2 space-y-2 max-h-[200px] overflow-y-auto">
+</div>
+</div>
+<script>
+const searchStocks = [
+{
+symbol: 'AAPL',
+name: 'Apple Inc.',
+price: 176.38,
+change: -0.85,
+color: 'bg-gray-600'
+},
+{
+symbol: 'MSFT',
+name: 'Microsoft Corp.',
+price: 406.32,
+change: -1.23,
+color: 'bg-blue-600'
+},
+{
+symbol: 'NVDA',
+name: 'NVIDIA Corp.',
+price: 816.95,
+change: -2.45,
+color: 'bg-green-600'
+}
+];
+const mockStocks = [
+{
+symbol: 'CWEB',
+name: 'Direxion Dly CSI CH',
+price: 43.63,
+change: -3.07,
+preMarket: 40.90,
+color: 'bg-blue-600'
+},
+{
+symbol: 'KTEC',
+name: 'KraneShares Hang',
+price: 17.40,
+change: -0.97,
+preMarket: 17.57,
+color: 'bg-blue-500'
+},
+{
+symbol: 'PLTR',
+name: 'Palantir Techn',
+price: 84.77,
+change: -5.08,
+preMarket: 83.74,
+color: 'bg-gray-800'
+},
+{
+symbol: 'IGV',
+name: '北美軟件ETF-iShares',
+price: 96.33,
+change: -2.65,
+preMarket: 96.60,
+color: 'bg-purple-600'
+},
+{
+symbol: 'SMCI',
+name: '超微電腦',
+price: 42.95,
+change: -15.97,
+preMarket: 42.15,
+color: 'bg-green-600'
+}
+];
+function renderStocks() {
+const stockList = document.getElementById('stockList');
+stockList.innerHTML = mockStocks.map(stock => `
+<div class="stock-item p-4 rounded-lg bg-secondary">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full ${stock.color} flex items-center justify-center text-white font-medium">
+${stock.symbol[0]}
+</div>
+<div>
+<div class="font-medium">${stock.symbol}</div>
+<div class="text-sm text-gray-400">${stock.name}</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-medium">${stock.price}</div>
+<div class="text-sm ${stock.change > 0 ? 'price-up' : 'price-down'}">
+${stock.change > 0 ? '+' : ''}${stock.change}%
+</div>
+</div>
+</div>
+<div class="mt-2 text-sm text-gray-400">
+盤前: ${stock.preMarket}
+</div>
+</div>
+`).join('');
+}
+renderStocks();
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+searchInput.addEventListener('input', (e) => {
+const value = e.target.value.toLowerCase();
+if (value) {
+const filteredStocks = searchStocks.filter(stock =>
+stock.symbol.toLowerCase().includes(value) ||
+stock.name.toLowerCase().includes(value)
+);
+searchResults.innerHTML = filteredStocks.map(stock => `
+<div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full ${stock.color} flex items-center justify-center text-white font-medium">
+${stock.symbol[0]}
+</div>
+<div>
+<div class="font-medium">${stock.symbol}</div>
+<div class="text-sm text-gray-400">${stock.name}</div>
+</div>
+</div>
+<button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.symbol}')">
+<i class="ri-add-line text-gray-400"></i>
+</button>
+</div>
+`).join('');
+searchResults.classList.remove('hidden');
+document.querySelector('main').classList.add('mb-[280px]');
+} else {
+searchResults.classList.add('hidden');
+document.querySelector('main').classList.remove('mb-[280px]');
+}
+});
+function addToWatchlist(symbol) {
+const stock = searchStocks.find(s => s.symbol === symbol);
+if (stock && !mockStocks.find(s => s.symbol === symbol)) {
+mockStocks.push(stock);
+renderStocks();
+}
+}
+setInterval(() => {
+mockStocks.forEach(stock => {
+stock.price = +(stock.price + (Math.random() - 0.5) * 0.1).toFixed(2);
+stock.change = +((stock.price - stock.preMarket) / stock.preMarket * 100).toFixed(2);
+});
+renderStocks();
+}, 3000);
+</script>
+</body>
+</html>
