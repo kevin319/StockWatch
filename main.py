@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import yfinance as yf
 import requests
 from pydantic import BaseModel
@@ -81,6 +82,11 @@ async def chat(request: ChatRequest):
         return {"reply": reply}
     else:
         return {"reply": f"錯誤：無法連接到 Gemini API ({response.status_code})"}
+
+# 新增根路由，直接回傳 index.html
+@app.get("/")
+async def serve_index():
+    return FileResponse("static/index.html")
 
 if __name__ == "__main__":
     import uvicorn
