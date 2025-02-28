@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Web 看盤軟體</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>即時看盤</h1>
+    <div class="input-container">
+        <label>股票名稱或代碼：</label>
+        <input type="text" id="symbol" placeholder="如 台積電 或 2330.TW" oninput="fetchSuggestions()">
+        <div id="suggestions" class="suggestions"></div>
+        <button onclick="fetchStock()">查詢</button>
+    </div>
+    <div id="stock-info"></div>
+    <canvas id="priceChart" width="400" height="200"></canvas>
+    <h2>AI 助手</h2>
+    <input type="text" id="chat-input" placeholder="問我關於股票的問題">
+    <button onclick="sendChat()">發送</button>
+    <div id="chat-response"></div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
