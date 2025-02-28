@@ -1,0 +1,87 @@
+/* 基礎樣式 */
+body {
+    background-color: #0A0C10;
+    color: #fff;
+    width: 375px;
+    margin: 0 auto;
+}
+
+/* 股票項目動畫 */
+.stock-item {
+    transition: all 0.3s ease;
+}
+
+.stock-item:active {
+    transform: scale(0.98);
+}
+
+/* 價格變化顏色 */
+.price-up {
+    color: #22C55E;
+}
+
+.price-down {
+    color: #EF4444;
+}
+
+/* 導航激活狀態 */
+.nav-active {
+    color: #60A5FA;
+}
+
+/* 聊天窗口和設置頁面過渡效果 */
+.transition-all {
+    transition-property: all;
+    transition-duration: 300ms;
+}
+
+/* 打字動畫 */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-indicator span {
+    width: 6px;
+    height: 6px;
+    background-color: #fff;
+    border-radius: 50%;
+    animation: typing 1s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.3;
+    }
+    50% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+/* 聊天窗口滾動條樣式 */
+#chatMessages::-webkit-scrollbar {
+    width: 4px;
+}
+
+#chatMessages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chatMessages::-webkit-scrollbar-thumb {
+    background: #4B5563;
+    border-radius: 2px;
+}
+
+#chatMessages::-webkit-scrollbar-thumb:hover {
+    background: #6B7280;
+}

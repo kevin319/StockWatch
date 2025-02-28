@@ -2,24 +2,145 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Web 看盤軟體</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=375px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MyStock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
 </head>
-<body>
-    <h1>即時看盤</h1>
-    <div class="input-container">
-        <label>股票名稱或代碼：</label>
-        <input type="text" id="symbol" placeholder="如 台積電 或 2330.TW" oninput="fetchSuggestions()">
-        <div id="suggestions" class="suggestions"></div>
-        <button onclick="fetchStock()">查詢</button>
+<body class="pb-[72px]">
+    <!-- 頂部導航欄 -->
+    <header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+        <div class="flex items-center justify-between px-4 h-14">
+            <h1 class="text-lg font-medium">MyStock</h1>
+            <div class="flex items-center gap-4">
+                <button class="w-8 h-8 flex items-center justify-center" onclick="toggleChatWindow()">
+                    <i class="ri-message-3-line text-xl"></i>
+                </button>
+                <button class="w-8 h-8 flex items-center justify-center" onclick="toggleSettingsPage()">
+                    <i class="ri-settings-3-line text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 消息中心彈窗 -->
+    <div id="messageModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="bg-[#0A0C10] w-[90%] max-w-md rounded-lg absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium">消息中心</h3>
+                <button onclick="toggleMessageModal()" class="w-8 h-8 flex items-center justify-center">
+                    <i class="ri-close-line text-xl"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <!-- 系統通知 -->
+                <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                        <i class="ri-notification-4-line text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="font-medium mb-1">系統通知</div>
+                        <div class="text-sm text-gray-400">PLTR 已突破前高位置，建議關注</div>
+                        <div class="text-xs text-gray-500 mt-1">2025-02-28 13:05</div>
+                    </div>
+                </div>
+                <!-- 價格提醒 -->
+                <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
+                    <div class="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center shrink-0">
+                        <i class="ri-line-chart-line text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="font-medium mb-1">價格提醒</div>
+                        <div class="text-sm text-gray-400">SMCI 已達到您設置的目標價格</div>
+                        <div class="text-xs text-gray-500 mt-1">2025-02-28 12:30</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="stock-info"></div>
-    <canvas id="priceChart" width="400" height="200"></canvas>
-    <h2>AI 助手</h2>
-    <input type="text" id="chat-input" placeholder="問我關於股票的問題">
-    <button onclick="sendChat()">發送</button>
-    <div id="chat-response"></div>
-    <script src="/static/script.js"></script>
+
+
+    <!-- 設置頁面 -->
+    <div id="settingsPage" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
+        <div class="h-full overflow-y-auto">
+            <header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+                <div class="flex items-center px-4 h-14">
+                    <button class="w-8 h-8 flex items-center justify-center mr-2" onclick="toggleSettingsPage()">
+                        <i class="ri-arrow-left-line text-xl"></i>
+                    </button>
+                    <h1 class="text-lg font-medium">設置</h1>
+                </div>
+            </header>
+            <main class="mt-14 px-4">
+                <!-- 用戶資料 -->
+                <div class="flex items-center gap-3 p-4 bg-secondary rounded-lg mb-6">
+                    <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-medium">
+                        J
+                    </div>
+                    <div>
+                        <div class="font-medium">John Smith</div>
+                        <div class="text-sm text-gray-400">john.smith@gmail.com</div>
+                    </div>
+                </div>
+                <!-- 自選股票列表 -->
+                <div class="mb-4">
+                    <h2 class="text-lg font-medium mb-3">自選股票</h2>
+                    <div class="space-y-3" id="watchlist"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+
+    <!-- AI 聊天窗口 -->
+    <div id="chatWindow" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
+        <div class="flex flex-col h-full">
+            <!-- 聊天窗口頂部 -->
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                <h2 class="text-lg font-medium">AI 助理</h2>
+                <button onclick="toggleChatWindow()" class="w-8 h-8 flex items-center justify-center">
+                    <i class="ri-close-line text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- 聊天訊息區域 -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+            
+            <!-- 輸入區域 -->
+            <div class="border-t border-gray-800 p-4">
+                <div class="flex gap-2">
+                    <input type="text" id="messageInput" 
+                           class="flex-1 bg-gray-800 rounded-lg px-4 py-2 text-sm focus:outline-none"
+                           placeholder="輸入訊息..."
+                           onkeypress="if(event.key === 'Enter') sendMessage()">
+                    <button onclick="sendMessage()" 
+                            class="w-10 h-10 flex items-center justify-center bg-blue-600 rounded-lg">
+                        <i class="ri-send-plane-fill"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 主要內容區域 -->
+    <main class="mt-14 px-4 transition-all duration-300">
+        <div class="space-y-3" id="stockList"></div>
+    </main><!-- 底部搜尋欄 -->
+    <div class="fixed bottom-0 w-full bg-[#0A0C10] border-t border-gray-800">
+        <div class="px-4 py-2 flex items-center bg-secondary rounded-lg mx-4 my-2">
+            <i class="ri-search-line text-gray-400 mr-2"></i>
+            <input type="text" id="searchInput" placeholder="搜尋股票代號或名稱..." class="bg-transparent flex-1 text-sm focus:outline-none text-white">
+            <button class="w-8 h-8 flex items-center justify-center">
+                <i class="ri-mic-line text-gray-400"></i>
+            </button>
+        </div>
+        <div id="searchResults" class="hidden mx-4 mb-2 space-y-2 max-h-[200px] overflow-y-auto bg-[#0A0C10]">
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/main.js"></script>
 </body>
 </html>

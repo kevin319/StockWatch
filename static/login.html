@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockWatch - 登入</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .login-container {
+            background-color: #2d2d2d;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-screen flex items-center justify-center">
+    <div class="max-w-md w-full p-6 bg-gray-800 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold text-center mb-8">StockWatch</h1>
+        <p class="text-center mb-8 text-gray-400">請使用 Google 帳號登入以使用服務</p>
+        
+        <div id="g_id_onload"
+             data-client_id="167754876375-r3qvd9ai1e872mgqr6q7v2st90v8phb6.apps.googleusercontent.com"
+             data-context="signin"
+             data-ux_mode="popup"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+
+        <div class="flex justify-center">
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="rectangular"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function handleCredentialResponse(response) {
+            // 獲取 ID token
+            const token = response.credential;
+            
+            // 儲存 token
+            localStorage.setItem('google_token', token);
+            
+            // 驗證 token
+            fetch(`/verify_token?token=${token}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.valid) {
+                        window.location.href = '/home';
+                    } else {
+                        alert('登入失敗，請重試');
+                    }
+                })
+                .catch(error => {
+                    console.error('驗證失敗:', error);
+                    alert('登入失敗，請重試');
+                });
+        }
+
+        // 檢查是否已登入
+        window.onload = function() {
+            const token = localStorage.getItem('google_token');
+            if (token) {
+                fetch(`/verify_token?token=${token}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.valid) {
+                            window.location.href = '/home';
+                        }
+                    })
+                    .catch(() => {
+                        localStorage.removeItem('google_token');
+                    });
+            }
+        };
+    </script>
+</body>
+</html>
