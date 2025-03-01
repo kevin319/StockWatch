@@ -15,6 +15,16 @@ body {
     transform: scale(0.98);
 }
 
+/* 股票圖標樣式 */
+.stock-item img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: #374151;
+    border: 1px solid #4B5563;
+}
+
 /* 價格變化顏色 */
 .price-up {
     color: #22C55E;
