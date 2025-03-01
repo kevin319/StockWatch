@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=375px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=393px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MyStock</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet">
@@ -10,9 +10,12 @@
 </head>
 <body class="pb-[72px]">
     <!-- 頂部導航欄 -->
-    <header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+    <header class="fixed top-0 w-full bg-[#0A0C10] z-50">
         <div class="flex items-center justify-between px-4 h-14">
-            <h1 class="text-lg font-medium">MyStock</h1>
+            <div class="flex items-center gap-4">
+                <h1 class="text-lg font-medium">My Stock</h1>
+                <div id="lastUpdateTime" class="text-[10px] text-gray-400">最後更新：--:--:--</div>
+            </div>
             <div class="flex items-center gap-4">
                 <button class="w-8 h-8 flex items-center justify-center" onclick="toggleChatWindow()">
                     <i class="ri-message-3-line text-xl"></i>
@@ -64,7 +67,7 @@
     <!-- 設置頁面 -->
     <div id="settingsPage" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
         <div class="h-full overflow-y-auto">
-            <header class="fixed top-0 w-full bg-[#0A0C10] z-50 border-b border-gray-800">
+            <header class="fixed top-0 w-full bg-[#0A0C10] z-50">
                 <div class="flex items-center px-4 h-14">
                     <button class="w-8 h-8 flex items-center justify-center mr-2" onclick="toggleSettingsPage()">
                         <i class="ri-arrow-left-line text-xl"></i>
@@ -100,7 +103,7 @@
     <div id="chatWindow" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
         <div class="flex flex-col h-full">
             <!-- 聊天窗口頂部 -->
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+            <div class="flex items-center justify-between px-4 py-3">
                 <h2 class="text-lg font-medium">AI 助理</h2>
                 <button onclick="toggleChatWindow()" class="w-8 h-8 flex items-center justify-center">
                     <i class="ri-close-line text-xl"></i>
@@ -111,7 +114,7 @@
             <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
             
             <!-- 輸入區域 -->
-            <div class="border-t border-gray-800 p-4">
+            <div class="p-4">
                 <div class="flex gap-2">
                     <input type="text" id="messageInput" 
                            class="flex-1 bg-gray-800 rounded-lg px-4 py-2 text-sm focus:outline-none"
@@ -129,13 +132,9 @@
 
     <!-- 主要內容區域 -->
     <main class="mt-14 px-4 transition-all duration-300">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="text-lg font-medium">股票列表</h2>
-            <div id="lastUpdateTime" class="text-sm text-gray-400">最後更新：--:--:--</div>
-        </div>
         <div class="space-y-3" id="stockList"></div>
     </main><!-- 底部搜尋欄 -->
-    <div class="fixed bottom-0 w-full bg-[#0A0C10] border-t border-gray-800">
+    <div class="fixed bottom-0 w-full bg-[#0A0C10]">
         <div class="px-4 py-2 flex items-center bg-secondary rounded-lg mx-4 my-2">
             <i class="ri-search-line text-gray-400 mr-2"></i>
             <input type="text" id="searchInput" placeholder="搜尋股票代號或名稱..." class="bg-transparent flex-1 text-sm focus:outline-none text-white">
