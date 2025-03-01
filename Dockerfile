@@ -6,13 +6,16 @@ WORKDIR /app
 
 # 複製前端相關文件
 COPY package.json yarn.lock ./
+
+# 安裝依賴
+RUN yarn install
+
+# 複製其他前端文件
 COPY static ./static
 COPY tailwind.config.js postcss.config.js ./
 
-# 安裝依賴並構建 CSS
-RUN yarn install && \
-    yarn global add tailwindcss postcss autoprefixer && \
-    tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify
+# 構建 CSS
+RUN yarn build:css
 
 # 第二階段：Python 應用
 FROM python:3.9-slim
