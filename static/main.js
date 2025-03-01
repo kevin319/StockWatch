@@ -101,15 +101,80 @@ function toggleChatWindow() {
 
 function toggleSettingsPage() {
     const settingsPage = document.getElementById('settingsPage');
+    if (!settingsPage) return;
+    
     settingsPage.classList.toggle('hidden');
+    
+    // 如果設置頁面變為可見，重新渲染自選股列表和所有股票列表
+    if (!settingsPage.classList.contains('hidden')) {
+        renderWatchlist();
+        renderSettingsStockList();
+    }
+}
+
+// 渲染設置頁面的股票列表
+function renderSettingsStockList() {
+    const stockListContainer = document.getElementById('settingsStockList');
+    if (!stockListContainer) return;
+
+    stockListContainer.innerHTML = '';
+
+    stocks.forEach((stock) => {
+        const stockItem = document.createElement('div');
+        stockItem.className = 'flex items-center justify-between p-4 bg-secondary rounded-lg';
+
+        // 檢查是否在自選股清單中
+        const isInWatchlist = watchlistStocks.includes(stock.ticker);
+
+        stockItem.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-blue-600/10 flex items-center justify-center overflow-hidden">
+                    ${stock.logo_url ? 
+                        `<img src="${stock.logo_url}" alt="${stock.ticker}" class="w-6 h-6 object-contain">` :
+                        `<span class="text-blue-600 font-medium text-lg">${stock.ticker[0]}</span>`
+                    }
+                </div>
+                <div>
+                    <div class="font-medium">${stock.ticker}</div>
+                    <div class="text-sm text-gray-400">${stock.company_name}</div>
+                </div>
+            </div>
+            <button onclick="${isInWatchlist ? `removeStock('${stock.ticker}')` : `addToWatchlist('${stock.ticker}')`}" 
+                    class="w-8 h-8 flex items-center justify-center ${isInWatchlist ? 'text-red-500 hover:bg-red-500/10' : 'text-blue-500 hover:bg-blue-500/10'} rounded-lg">
+                <i class="ri-${isInWatchlist ? 'delete-bin-line' : 'add-line'}"></i>
+            </button>
+        `;
+
+        stockListContainer.appendChild(stockItem);
+    });
 }
 
 // 自選股清單管理
 let watchlistStocks = [];
 
-function removeStock(index) {
-    watchlistStocks.splice(index, 1);
-    renderWatchlist();
+function removeStock(ticker) {
+    const index = watchlistStocks.indexOf(ticker);
+    if (index >= 0) {
+        watchlistStocks.splice(index, 1);
+        
+        // 更新 localStorage
+        localStorage.setItem('watchlistStocks', JSON.stringify(watchlistStocks));
+        
+        // 更新介面
+        renderWatchlist();
+        renderSettingsStockList();
+        renderStocks();
+        
+        // 呼叫後端 API 移除股票
+        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        if (userInfo && userInfo.email) {
+            fetch(`/watchlist/remove?ticker=${ticker}&user_email=${userInfo.email}`, {
+                method: 'POST'
+            }).catch(error => {
+                console.error('移除股票時發生錯誤:', error);
+            });
+        }
+    }
 }
 
 // 拖放功能
