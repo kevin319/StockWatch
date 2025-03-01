@@ -207,6 +207,9 @@ async function updateStockPrices() {
         // 重新渲染股票列表
         renderStocks();
         
+        // 更新最後更新時間
+        updateLastUpdateTime();
+        
     } catch (error) {
         console.error('更新股票價格時發生錯誤:', error);
     }
@@ -237,14 +240,14 @@ function renderStocks() {
                     <!-- 第一行：股票代號、市場狀態、收盤價、漲跌幅 -->
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <span class="text-base font-medium">${stock.ticker}</span>
-                            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                            <span class="text-sm font-medium">${stock.ticker}</span>
+                            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
                                 ${getMarketStateText(stock.market_state)}
                             </span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">$${stock.price.toFixed(2)}</span>
-                            <div class="flex items-center ${priceChangeClass} text-sm">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm font-medium">$${stock.price.toFixed(2)}</span>
+                            <div class="flex items-center ${priceChangeClass} text-xs">
                                 <i class="${priceChangeIcon}"></i>
                                 <span>${Math.abs(stock.price_change_percent).toFixed(2)}%</span>
                             </div>
@@ -255,22 +258,27 @@ function renderStocks() {
                     <div class="text-sm text-gray-400">${stock.company_name}</div>
 
                     <!-- 第三行：盤前/盤後資訊 -->
-                    <div class="text-sm text-gray-400">
-                        ${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}: 
-                        ${stock.extended_price ? 
-                            `$${stock.extended_price.toFixed(2)} 
-                            <span class="${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
-                                ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
-                                (${stock.extended_change_percent.toFixed(2)}%)
-                            </span>` : 
-                            '暫無資料'
-                        }
+                    <div class="flex justify-end text-xs text-gray-400">
+                        <div class="flex items-center gap-1.5">
+                            <span>${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}</span>
+                            ${stock.extended_price ? 
+                                `<span>$${stock.extended_price.toFixed(2)}</span>
+                                <div class="flex items-center ${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
+                                    <i class="${stock.extended_change >= 0 ? 'ri-arrow-up-s-fill' : 'ri-arrow-down-s-fill'}"></i>
+                                    <span>${Math.abs(stock.extended_change_percent).toFixed(2)}%</span>
+                                </div>` : 
+                                '<span>暫無資料</span>'
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
         `;
         stockList.appendChild(stockItem);
     });
+
+    // 更新最後更新時間
+    updateLastUpdateTime();
 }
 
 // 獲取市場狀態文字
@@ -291,15 +299,16 @@ function getMarketStateText(state) {
 
 // 更新最後更新時間
 function updateLastUpdateTime() {
-    const timeElement = document.getElementById('lastUpdateTime');
-    if (!timeElement) return;
-    
     const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const seconds = now.getSeconds().toString().padStart(2, '0');
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
     
-    timeElement.textContent = `最後更新：${hours}:${minutes}:${seconds}`;
+    document.getElementById('lastUpdateTime').textContent = 
+        `最後更新：${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 }
 
 // 渲染自選股列表
@@ -468,6 +477,7 @@ async function initializeStocks() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeStocks();
     initSearchFunctionality();
+    updateLastUpdateTime(); // 初始化時更新時間
 });
 
 // AI 聊天功能
