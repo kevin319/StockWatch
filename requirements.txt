@@ -4,3 +4,7 @@ yfinance
 requests
 yahooquery
 python-dotenv
+google-auth
+google-auth-oauthlib
+python-jose[cryptography]
+python-multipart
