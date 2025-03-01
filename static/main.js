@@ -224,37 +224,47 @@ function renderStocks() {
         const stockItem = document.createElement('div');
         stockItem.className = 'stock-item bg-secondary rounded-lg p-4';
         stockItem.innerHTML = `
-            <div class="flex items-start">
-                <div class="flex items-start gap-3 w-full">
+            <div class="flex items-center gap-4">
+                <!-- 公司 Icon -->
+                <div class="flex-shrink-0">
                     <img src="${stock.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(stock.ticker)}&background=random&color=fff`}" 
                          alt="${stock.company_name}" 
-                         class="w-10 h-10 rounded-full object-cover bg-gray-700 overflow-hidden">
-                    <div class="flex-1">
+                         class="w-12 h-12 rounded-full object-cover bg-gray-700 overflow-hidden">
+                </div>
+
+                <!-- 股票資訊 -->
+                <div class="flex-1 space-y-1.5">
+                    <!-- 第一行：股票代號、市場狀態、收盤價、漲跌幅 -->
+                    <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <span class="font-medium">${stock.ticker}</span>
-                            <span class="text-sm text-gray-400">${stock.company_name}</span>
+                            <span class="text-base font-medium">${stock.ticker}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                                ${getMarketStateText(stock.market_state)}
+                            </span>
                         </div>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="text-lg font-medium">$${stock.price.toFixed(2)}</span>
-                            <div class="flex items-center ${priceChangeClass}">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">$${stock.price.toFixed(2)}</span>
+                            <div class="flex items-center ${priceChangeClass} text-sm">
                                 <i class="${priceChangeIcon}"></i>
                                 <span>${Math.abs(stock.price_change_percent).toFixed(2)}%</span>
                             </div>
-                            <span class="text-xs text-gray-400 ml-2">${getMarketStateText(stock.market_state)}</span>
                         </div>
-                        <div class="flex items-center gap-2 mt-1 text-sm">
-                            <span class="text-gray-400">
-                                ${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}: 
-                                ${stock.extended_price ? 
-                                    `$${stock.extended_price.toFixed(2)} 
-                                    <span class="${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
-                                        ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
-                                        (${stock.extended_change_percent.toFixed(2)}%)
-                                    </span>` : 
-                                    '暫無資料'
-                                }
-                            </span>
-                        </div>
+                    </div>
+
+                    <!-- 第二行：公司名稱 -->
+                    <div class="text-sm text-gray-400">${stock.company_name}</div>
+
+                    <!-- 第三行：盤前/盤後資訊 -->
+                    <div class="text-sm text-gray-400">
+                        ${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}: 
+                        ${stock.extended_price ? 
+                            `$${stock.extended_price.toFixed(2)} 
+                            <span class="${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
+                                ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
+                                (${stock.extended_change_percent.toFixed(2)}%)
+                            </span>` : 
+                            '暫無資料'
+                        }
                     </div>
                 </div>
             </div>
