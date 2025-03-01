@@ -498,10 +498,10 @@ async function sendMessage() {
     
     // 添加用戶訊息
     const userMessageDiv = document.createElement('div');
-    userMessageDiv.className = 'mb-4';
+    userMessageDiv.className = 'mb-2';
     userMessageDiv.innerHTML = `
         <div class="flex justify-end">
-            <div class="bg-blue-600 text-white rounded-lg py-2 px-4 max-w-[80%]">
+            <div class="bg-[#0B93F6] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative mr-2">
                 ${escapeHtml(message)}
             </div>
         </div>
@@ -513,14 +513,14 @@ async function sendMessage() {
     
     // 添加載入中動畫
     const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'mb-4';
+    loadingDiv.className = 'mb-2';
     loadingDiv.innerHTML = `
         <div class="flex">
-            <div class="bg-gray-700 text-white rounded-lg py-2 px-4 max-w-[80%]">
-                <div class="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+            <div class="bg-[#303030] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative ml-2">
+                <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
                 </div>
             </div>
         </div>
@@ -543,11 +543,12 @@ async function sendMessage() {
         
         // 添加 AI 回覆
         const aiMessageDiv = document.createElement('div');
-        aiMessageDiv.className = 'mb-4';
+        aiMessageDiv.className = 'mb-2';
+        const messageHtml = marked.parse(data.response.trim());
         aiMessageDiv.innerHTML = `
             <div class="flex">
-                <div class="bg-gray-700 text-white rounded-lg py-2 px-4 max-w-[80%]">
-                    ${escapeHtml(data.response)}
+                <div class="bg-[#303030] text-white rounded-[20px] py-[6px] px-[10px] max-w-[70%] relative ml-2 markdown-content whitespace-pre-line">
+                    ${messageHtml}
                 </div>
             </div>
         `;
@@ -556,10 +557,10 @@ async function sendMessage() {
     } catch (error) {
         // 顯示錯誤訊息
         const errorDiv = document.createElement('div');
-        errorDiv.className = 'mb-4';
+        errorDiv.className = 'mb-2';
         errorDiv.innerHTML = `
             <div class="flex">
-                <div class="bg-red-600 text-white rounded-lg py-2 px-4 max-w-[80%]">
+                <div class="bg-[#303030] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative ml-2">
                     發生錯誤，請稍後再試
                 </div>
             </div>
@@ -585,3 +586,43 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+// 添加樣式到 head
+const style = document.createElement('style');
+style.textContent = `
+    .markdown-content {
+        line-height: 1.3;
+        font-size: 0.95rem;
+    }
+    .markdown-content p {
+        margin: 0;
+    }
+    .markdown-content p:not(:last-child) {
+        margin-bottom: 0.3em;
+    }
+    .markdown-content strong {
+        color: #fff;
+        font-weight: 700;
+    }
+    .markdown-content em {
+        font-style: italic;
+        color: #e2e8f0;
+    }
+    .markdown-content ul, .markdown-content ol {
+        margin: 0;
+        padding-left: 1.2em;
+    }
+    .markdown-content li {
+        margin: 0;
+    }
+    .markdown-content code {
+        background: rgba(255,255,255,0.1);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+    .markdown-content br {
+        display: none;
+    }
+`;
+document.head.appendChild(style);
