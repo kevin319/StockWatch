@@ -3,7 +3,7 @@ import aiohttp
 from app.core.config import settings
 from app.models.schemas import ChatRequest
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
