@@ -356,3 +356,26 @@ async def add_to_watchlist(ticker: str, user_email: str):
             cur.close()
         if 'conn' in locals():
             conn.close()
+
+@router.delete("/watchlist/{user_email}/{ticker}")
+async def remove_from_watchlist(user_email: str, ticker: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 從 watchlist 中移除股票
+        cur.execute("""
+            DELETE FROM watchlist_stocks 
+            WHERE user_email = %s AND ticker = %s
+        """, (user_email, ticker))
+        
+        conn.commit()
+        return {"message": "成功從追蹤清單移除股票", "ticker": ticker}
+        
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()

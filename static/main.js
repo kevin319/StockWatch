@@ -119,9 +119,17 @@ function renderSettingsStockList() {
 
     stockListContainer.innerHTML = '';
 
-    stocks.forEach((stock) => {
+    stocks.forEach((stock, index) => {
         const stockItem = document.createElement('div');
-        stockItem.className = 'flex items-center justify-between p-4 bg-secondary rounded-lg';
+        stockItem.className = 'flex items-center justify-between p-4 bg-secondary rounded-lg mb-2 cursor-move';
+        stockItem.draggable = true;
+        stockItem.dataset.index = index;
+
+        stockItem.addEventListener('dragstart', handleDragStart);
+        stockItem.addEventListener('dragover', handleDragOver);
+        stockItem.addEventListener('drop', handleDrop);
+        stockItem.addEventListener('dragenter', handleDragEnter);
+        stockItem.addEventListener('dragleave', handleDragLeave);
 
         stockItem.innerHTML = `
             <div class="flex items-center gap-3">
@@ -136,10 +144,13 @@ function renderSettingsStockList() {
                     <div class="text-sm text-gray-400">${stock.company_name}</div>
                 </div>
             </div>
-            <button onclick="removeStock('${stock.ticker}')" 
-                    class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
-                <i class="ri-delete-bin-line"></i>
-            </button>
+            <div class="flex items-center gap-2">
+                <i class="ri-drag-move-line text-gray-400"></i>
+                <button onclick="removeStock('${stock.ticker}')" 
+                        class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </div>
         `;
 
         stockListContainer.appendChild(stockItem);
@@ -147,24 +158,32 @@ function renderSettingsStockList() {
 }
 
 // 移除股票
-function removeStock(ticker) {
-    // 從本地數據中移除
-    const index = stocks.findIndex(s => s.ticker === ticker);
-    if (index >= 0) {
-        stocks.splice(index, 1);
-        // 更新介面
-        renderSettingsStockList();
-        renderStocks();
+async function removeStock(ticker) {
+    try {
+        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        if (!userInfo || !userInfo.email) {
+            throw new Error('找不到使用者資訊');
+        }
 
         // 呼叫後端 API 移除股票
-        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
-        if (userInfo && userInfo.email) {
-            fetch(`/watchlist/remove?ticker=${ticker}&user_email=${userInfo.email}`, {
-                method: 'POST'
-            }).catch(error => {
-                console.error('移除股票時發生錯誤:', error);
-            });
+        const response = await fetch(`/watchlist/${userInfo.email}/${ticker}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error('移除股票失敗');
         }
+
+        // 從本地數據中移除
+        const index = stocks.findIndex(s => s.ticker === ticker);
+        if (index >= 0) {
+            stocks.splice(index, 1);
+            // 更新介面
+            renderSettingsStockList();
+            renderStocks();
+        }
+    } catch (error) {
+        console.error('移除股票時發生錯誤:', error);
     }
 }
 
@@ -210,25 +229,81 @@ async function addToWatchlist(ticker) {
     }
 }
 
-// 拖放功能
+// 拖拉相關變數
+let draggedItem = null;
 let draggedItemIndex = null;
 
-function dragStart(e) {
-    draggedItemIndex = e.target.dataset.index;
+// 拖拉事件處理函數
+function handleDragStart(e) {
+    draggedItem = e.target;
+    draggedItemIndex = parseInt(e.target.dataset.index);
     e.target.classList.add('opacity-50');
 }
 
-function dragOver(e) {
+function handleDragOver(e) {
     e.preventDefault();
 }
 
-function drop(e) {
+function handleDragEnter(e) {
     e.preventDefault();
-    const dropIndex = e.target.closest('[data-index]').dataset.index;
+    const item = e.target.closest('[data-index]');
+    if (item && item !== draggedItem) {
+        item.classList.add('bg-blue-500/10');
+    }
+}
+
+function handleDragLeave(e) {
+    const item = e.target.closest('[data-index]');
+    if (item) {
+        item.classList.remove('bg-blue-500/10');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const dropItem = e.target.closest('[data-index]');
+    if (!dropItem || !draggedItem) return;
+
+    // 移除拖拉時的視覺效果
+    draggedItem.classList.remove('opacity-50');
+    dropItem.classList.remove('bg-blue-500/10');
+
+    const dropIndex = parseInt(dropItem.dataset.index);
+    
+    // 重新排序股票
     const itemToMove = stocks[draggedItemIndex];
     stocks.splice(draggedItemIndex, 1);
     stocks.splice(dropIndex, 0, itemToMove);
+
+    // 更新介面
+    renderSettingsStockList();
     renderStocks();
+
+    // 更新後端
+    updateStockOrder();
+}
+
+// 更新後端股票順序
+async function updateStockOrder() {
+    try {
+        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        if (!userInfo || !userInfo.email) return;
+
+        const tickers = stocks.map(stock => stock.ticker);
+        
+        await fetch('/watchlist/reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_email: userInfo.email,
+                tickers: tickers
+            })
+        });
+    } catch (error) {
+        console.error('更新股票順序時發生錯誤:', error);
+    }
 }
 
 // 股票數據管理
