@@ -344,10 +344,50 @@ function renderWatchlist() {
     }).join('');
 }
 
-function addToWatchlist(symbol) {
+async function addToWatchlist(symbol) {
+    // 檢查是否已存在於 stocks 中
+    if (stocks.some(s => s.ticker === symbol)) {
+        document.getElementById('searchError').textContent = '已在追蹤列表';
+        return;
+    }
+
     if (!watchlistStocks.includes(symbol)) {
         watchlistStocks.push(symbol);
         renderWatchlist();
+        
+        // 獲取股票資料並添加到 stocks
+        try {
+            const response = await fetch(`/stock/${symbol}`);
+            if (!response.ok) throw new Error('獲取股票資料失敗');
+            
+            const stockData = await response.json();
+            stocks.push({
+                ticker: symbol,
+                price: stockData.price || 0,
+                price_change: stockData.price_change || 0,
+                price_change_percent: stockData.price_change_percent || 0,
+                market_state: stockData.market_state || 'REGULAR',
+                extended_price: stockData.extended_price,
+                extended_type: stockData.extended_type,
+                extended_change: stockData.extended_change,
+                extended_change_percent: stockData.extended_change_percent
+            });
+            renderStocks();
+            
+            // 立即更新所有股票價格
+            updateStockPrices();
+            
+            // 清除搜尋結果
+            const searchInput = document.getElementById('searchInput');
+            const searchResults = document.getElementById('searchResults');
+            if (searchInput) searchInput.value = '';
+            if (searchResults) searchResults.innerHTML = '';
+            document.getElementById('searchError').textContent = '';
+            
+        } catch (error) {
+            console.error('添加股票時發生錯誤:', error);
+            document.getElementById('searchError').textContent = '添加股票時發生錯誤';
+        }
     }
 }
 
@@ -381,13 +421,29 @@ function initSearchFunctionality() {
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
 
-    let debounceTimer;
-    searchInput.addEventListener('input', (e) => {
-        const value = e.target.value.toLowerCase().trim();
-        clearTimeout(debounceTimer);
+    // 在搜尋框後添加錯誤訊息元素
+    const errorSpan = document.createElement('span');
+    errorSpan.id = 'searchError';
+    errorSpan.className = 'text-red-500 ml-2';
+    searchInput.parentNode.appendChild(errorSpan);
 
-        if (value.length === 0) {
-            document.getElementById('searchResults').style.display = 'none';
+    let debounceTimer;
+    searchInput.addEventListener('input', async (e) => {
+        const value = e.target.value.trim();
+        
+        // 清除錯誤訊息
+        document.getElementById('searchError').textContent = '';
+
+        // 清除之前的計時器
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
+
+        if (!value) {
+            const searchResults = document.getElementById('searchResults');
+            if (searchResults) {
+                searchResults.innerHTML = '';
+            }
             return;
         }
 
@@ -400,7 +456,7 @@ function initSearchFunctionality() {
                 renderSearchResults(results);
             } catch (error) {
                 console.error('搜尋錯誤:', error);
-                showError('搜尋時發生錯誤');
+                document.getElementById('searchError').textContent = '搜尋時發生錯誤';
             }
         }, 300);
     });
@@ -415,17 +471,13 @@ function renderSearchResults(stocks) {
         <div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                    <span class="text-white font-medium">${stock.ticker[0]}</span>
+                    <span class="text-white font-medium">${stock.symbol[0]}</span>
                 </div>
                 <div>
-                    <div class="font-medium">${stock.ticker}</div>
-                    <div class="text-sm ${stock.price_change >= 0 ? 'text-green-500' : 'text-red-500'}">
-                        $${stock.price.toFixed(2)}
-                        ${stock.price_change >= 0 ? '+' : ''}${stock.price_change.toFixed(2)}%
-                    </div>
+                    <div class="font-medium">${stock.display}</div>
                 </div>
             </div>
-            <button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.ticker}')">
+            <button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.symbol}')">
                 <i class="ri-add-line text-gray-400"></i>
             </button>
         </div>
@@ -469,7 +521,7 @@ async function initializeStocks() {
         // 如果 API 調用失敗，使用測試數據
         stocks = initStockData();
         renderStocks();
-        showError('載入股票數據失敗，使用測試數據');
+        document.getElementById('searchError').textContent = '載入股票數據失敗，使用測試數據';
     }
 }
 
