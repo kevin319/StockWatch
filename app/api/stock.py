@@ -56,6 +56,50 @@ async def get_stock_price(ticker: str):
                         extended_change = extended_price - current_price
                         extended_change_percent = (extended_change / current_price) * 100
             
+            # 更新資料到 stock_prices 表
+            try:
+                conn = get_db_connection()
+                cur = conn.cursor()
+                
+                sql = """
+                    INSERT INTO stock_prices (
+                        ticker, price, prev_close, price_change, price_change_percent,
+                        company_name, logo_url, market_state, extended_price,
+                        extended_type, extended_change, extended_change_percent,
+                        last_updated
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                    )
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        price = EXCLUDED.price,
+                        prev_close = EXCLUDED.prev_close,
+                        price_change = EXCLUDED.price_change,
+                        price_change_percent = EXCLUDED.price_change_percent,
+                        company_name = EXCLUDED.company_name,
+                        logo_url = EXCLUDED.logo_url,
+                        market_state = EXCLUDED.market_state,
+                        extended_price = EXCLUDED.extended_price,
+                        extended_type = EXCLUDED.extended_type,
+                        extended_change = EXCLUDED.extended_change,
+                        extended_change_percent = EXCLUDED.extended_change_percent,
+                        last_updated = NOW();
+                """
+                
+                cur.execute(sql, (
+                    ticker, current_price, prev_close, price_change, price_change_percent,
+                    company_name, logo_url, market_state, extended_price,
+                    extended_type, extended_change, extended_change_percent
+                ))
+                
+                conn.commit()
+            except Exception as db_error:
+                print(f"資料庫更新錯誤: {str(db_error)}")
+            finally:
+                if 'cur' in locals():
+                    cur.close()
+                if 'conn' in locals():
+                    conn.close()
+            
             return {
                 'ticker': ticker, 
                 'price': current_price,
