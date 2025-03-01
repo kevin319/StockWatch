@@ -121,7 +121,7 @@ function renderSettingsStockList() {
 
     stocks.forEach((stock, index) => {
         const stockItem = document.createElement('div');
-        stockItem.className = 'flex items-center justify-between p-4 bg-secondary rounded-lg mb-2 cursor-move';
+        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2 cursor-move';
         stockItem.draggable = true;
         stockItem.dataset.index = index;
 
@@ -132,24 +132,26 @@ function renderSettingsStockList() {
         stockItem.addEventListener('dragleave', handleDragLeave);
 
         stockItem.innerHTML = `
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-blue-600/10 flex items-center justify-center overflow-hidden">
-                    ${stock.logo_url ? 
-                        `<img src="${stock.logo_url}" alt="${stock.ticker}" class="w-6 h-6 object-contain">` :
-                        `<span class="text-blue-600 font-medium text-lg">${stock.ticker[0]}</span>`
-                    }
+            <div class="flex items-center gap-4">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-full bg-blue-600/10 flex items-center justify-center overflow-hidden">
+                        ${stock.logo_url ? 
+                            `<img src="${stock.logo_url}" alt="${stock.ticker}" class="w-8 h-8 object-contain">` :
+                            `<span class="text-blue-600 font-medium text-xl">${stock.ticker[0]}</span>`
+                        }
+                    </div>
                 </div>
-                <div>
+                <div class="flex-1 space-y-1">
                     <div class="font-medium">${stock.ticker}</div>
                     <div class="text-sm text-gray-400">${stock.company_name}</div>
                 </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <i class="ri-drag-move-line text-gray-400"></i>
-                <button onclick="removeStock('${stock.ticker}')" 
-                        class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
-                    <i class="ri-delete-bin-line"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <i class="ri-drag-move-line text-gray-400"></i>
+                    <button onclick="removeStock('${stock.ticker}')" 
+                            class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </div>
             </div>
         `;
 
@@ -206,26 +208,31 @@ async function addToWatchlist(ticker) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || '新增股票失敗');
+            throw new Error('新增股票失敗');
         }
 
-        // 獲取股票資訊
-        const stockResponse = await fetch(`/stock/${ticker}`);
+        // 取得股票資訊
+        const stockResponse = await fetch(`/stockprice/${ticker}`);
         if (!stockResponse.ok) {
-            throw new Error('獲取股票資訊失敗');
+            throw new Error('取得股票資訊失敗');
         }
-
         const stockData = await stockResponse.json();
+
+        // 新增到本地數據
         stocks.push(stockData);
 
         // 更新介面
-        renderStocks();
         renderSettingsStockList();
+        renderStocks();
+
+        // 關閉搜尋結果
+        const searchResults = document.getElementById('searchResults');
+        const searchInput = document.getElementById('searchInput');
+        searchResults.classList.add('hidden');
+        searchInput.value = '';
 
     } catch (error) {
         console.error('新增股票時發生錯誤:', error);
-        alert(error.message || '新增股票失敗');
     }
 }
 
@@ -529,6 +536,88 @@ async function initializeStocks() {
 // 在頁面載入時初始化股票數據
 document.addEventListener('DOMContentLoaded', () => {
     initializeStocks();
+    
+    // 初始化搜尋功能
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    
+    let searchTimeout;
+
+    searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        if (!query) {
+            searchResults.classList.add('hidden');
+            return;
+        }
+
+        // 清除之前的 timeout
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+
+        // 設置新的 timeout，延遲 300ms 後執行搜尋
+        searchTimeout = setTimeout(async () => {
+            try {
+                // 呼叫自動完成 API
+                const response = await fetch(`/autocomplete/${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error('搜尋失敗');
+                }
+                const results = await response.json();
+
+                // 顯示搜尋結果
+                searchResults.innerHTML = '';
+                searchResults.classList.remove('hidden');
+                
+                if (results.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="p-3 text-center text-gray-400 text-sm">
+                            找不到符合的股票
+                        </div>
+                    `;
+                    return;
+                }
+
+                results.forEach(stock => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'flex items-center justify-between p-3 bg-secondary rounded-lg cursor-pointer hover:bg-blue-600/10';
+                    resultItem.onclick = () => addToWatchlist(stock.symbol);
+                    
+                    resultItem.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center">
+                                <span class="text-blue-600 font-medium">${stock.symbol[0]}</span>
+                            </div>
+                            <div>
+                                <div class="font-medium">${stock.symbol}</div>
+                                <div class="text-sm text-gray-400">${stock.name}</div>
+                                <div class="text-xs text-gray-500">${stock.exchange}</div>
+                            </div>
+                        </div>
+                        <button class="w-8 h-8 flex items-center justify-center text-blue-600">
+                            <i class="ri-add-line"></i>
+                        </button>
+                    `;
+                    
+                    searchResults.appendChild(resultItem);
+                });
+            } catch (error) {
+                console.error('搜尋時發生錯誤:', error);
+                searchResults.innerHTML = `
+                    <div class="p-3 text-center text-gray-400 text-sm">
+                        搜尋時發生錯誤
+                    </div>
+                `;
+            }
+        }, 300);
+    });
+
+    // 點擊其他地方時隱藏搜尋結果
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#searchInput') && !e.target.closest('#searchResults')) {
+            searchResults.classList.add('hidden');
+        }
+    });
 });
 
 // AI 聊天功能
