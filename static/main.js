@@ -384,9 +384,42 @@ async function addToWatchlist(symbol) {
             if (searchResults) searchResults.innerHTML = '';
             document.getElementById('searchError').textContent = '';
             
+            // 對接 add_to_watchlist API
+            const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+            if (!userInfo || !userInfo.email) {
+                throw new Error('找不到使用者資訊');
+            }
+
+            const addResponse = await fetch(`/watchlist/add?ticker=${symbol}&user_email=${userInfo.email}`, {
+                method: 'POST'
+            });
+
+            if (!addResponse.ok) {
+                const errorData = await addResponse.json();
+                throw new Error(errorData.error || '新增股票失敗');
+            }
+
+            const addResult = await addResponse.json();
+            if (addResult.message === "此股票已經在您的追蹤清單中") {
+                document.getElementById('searchError').textContent = addResult.message;
+            }
+            
         } catch (error) {
             console.error('添加股票時發生錯誤:', error);
-            document.getElementById('searchError').textContent = '添加股票時發生錯誤';
+            document.getElementById('searchError').textContent = error.message || '添加股票時發生錯誤';
+            
+            // 如果 API 呼叫失敗，需要回復本地狀態
+            const index = watchlistStocks.indexOf(symbol);
+            if (index > -1) {
+                watchlistStocks.splice(index, 1);
+                renderWatchlist();
+            }
+            
+            const stockIndex = stocks.findIndex(s => s.ticker === symbol);
+            if (stockIndex > -1) {
+                stocks.splice(stockIndex, 1);
+                renderStocks();
+            }
         }
     }
 }
