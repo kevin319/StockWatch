@@ -339,6 +339,10 @@ async def get_config():
         "google_client_id": client_id
     }
 
+@app.get("/api/google-client-id")
+async def get_google_client_id():
+    return {"client_id": os.getenv("GOOGLE_CLIENT_ID")}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

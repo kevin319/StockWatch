@@ -40,7 +40,7 @@
 </head>
 <body class="bg-gray-900 text-white h-screen flex items-center justify-center">
     <div class="max-w-md w-full p-6 bg-gray-800 rounded-lg shadow-lg">
-        <h1 class="text-3xl font-bold text-center mb-8">StockWatch</h1>
+        <h1 class="text-3xl font-bold text-center mb-8">My Stock</h1>
         <p class="text-center mb-8 text-gray-400">請使用 Google 帳號登入以使用服務</p>
         
         <div id="loading-spinner" class="flex justify-center mb-4">
@@ -112,21 +112,25 @@
         }
 
         window.onload = function() {
-            google.accounts.id.initialize({
-                client_id: '167754876375-r3qvd9ai1e872mgqr6q7v2st90v8phb6.apps.googleusercontent.com',
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: true
-            });
-            google.accounts.id.renderButton(
-                document.getElementById("buttonDiv"),
-                { 
-                    type: "standard",
-                    theme: "outline",
-                    size: "large",
-                    width: 280
-                }
-            );
+            fetch('/api/google-client-id')
+                .then(response => response.json())
+                .then(data => {
+                    google.accounts.id.initialize({
+                        client_id: data.client_id,
+                        callback: handleCredentialResponse,
+                        auto_select: false,
+                        cancel_on_tap_outside: true
+                    });
+                    google.accounts.id.renderButton(
+                        document.getElementById("buttonDiv"),
+                        { 
+                            type: "standard",
+                            theme: "outline",
+                            size: "large",
+                            width: 280
+                        }
+                    );
+                });
         };
     </script>
 </body>
