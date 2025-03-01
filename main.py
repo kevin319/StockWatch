@@ -4,7 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
+import requests
 import os
 import yahooquery as yq
 from pydantic import BaseModel
@@ -39,7 +40,9 @@ app.mount("/static", StaticFiles(directory="static", check_dir=False), name="sta
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY 未在 .env 檔案中設定")
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+if not GEMINI_API_URL:
+    raise ValueError("GEMINI_API_URL 未在 .env 檔案中設定")
 
 # Google OAuth 設定
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -121,12 +124,12 @@ async def read_home(request: Request):
 @app.get("/verify_token")
 async def verify_token(token: str):
     try:
-        # 驗證 Google Token
+        # 驗證 Google ID token
         idinfo = id_token.verify_oauth2_token(
-            token, requests.Request(), GOOGLE_CLIENT_ID)
+            token, google_requests.Request(), os.getenv("GOOGLE_CLIENT_ID"))
 
-        if idinfo['aud'] != GOOGLE_CLIENT_ID:
-            raise ValueError('錯誤的 Client ID')
+        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+            raise ValueError('錯誤的 token 發行者')
 
         # 返回用戶資訊
         return {
@@ -305,28 +308,56 @@ async def autocomplete(query: str):
 # 對話式 AI 查詢（使用 Gemini API）
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
-    }
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": f"你是金融科技助手，回答股票相關問題。\n用戶問題：{request.message}"
-                    }
-                ]
+    try:
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+
+        if not GEMINI_API_KEY:
+            return {"reply": "錯誤：未設定 GEMINI_API_KEY"}
+            
+        if not GEMINI_API_URL:
+            return {"reply": "錯誤：未設定 GEMINI_API_URL"}
+
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY
+        }
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": f"你是金融科技助手，回答股票相關問題。\n用戶問題：{request.message}"
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 1024
             }
-        ]
-    }
-    response = requests.post(GEMINI_API_URL, json=payload, headers=headers)
-    if response.status_code == 200:
-        result = response.json()
-        reply = result["candidates"][0]["content"]["parts"][0]["text"]
-        return {"reply": reply}
-    else:
-        return {"reply": f"錯誤：無法連接到 Gemini API ({response.status_code})"}
+        }
+        
+        print("發送請求到 Gemini API...")
+        print("URL:", GEMINI_API_URL)
+        print("Headers:", headers)
+        print("Payload:", payload)
+        
+        response = requests.post(GEMINI_API_URL, json=payload, headers=headers)
+        print("回應狀態碼:", response.status_code)
+        print("回應內容:", response.text)
+        
+        if response.status_code == 200:
+            result = response.json()
+            reply = result["candidates"][0]["content"]["parts"][0]["text"]
+            return {"reply": reply}
+        else:
+            return {"reply": f"錯誤：無法連接到 Gemini API ({response.status_code})\n{response.text}"}
+    except Exception as e:
+        print("發生錯誤:", str(e))
+        return {"reply": f"錯誤：{str(e)}"}
 
 @app.get("/api/config")
 async def get_config():

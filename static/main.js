@@ -68,12 +68,11 @@ function toggleMessageModal() {
     modal.classList.toggle('hidden');
 }
 
+let isChatWindowOpen = false;
 function toggleChatWindow() {
     const chatWindow = document.getElementById('chatWindow');
-    const mainContent = document.querySelector('main');
-    chatWindow.classList.toggle('hidden');
-    mainContent.classList.toggle('mt-[340px]');
-    mainContent.classList.toggle('mt-14');
+    isChatWindowOpen = !isChatWindowOpen;
+    chatWindow.style.display = isChatWindowOpen ? 'block' : 'none';
 }
 
 function toggleSettingsPage() {
@@ -168,8 +167,11 @@ async function updateStockPrices() {
 // 渲染股票列表
 function renderStocks() {
     const stockList = document.getElementById('stockList');
+    const isMobile = window.innerWidth <= 768;
+    const cardClass = isMobile ? 'w-[calc(100%+2rem)] -mx-4' : 'w-full';
+
     stockList.innerHTML = mockStocks.map(stock => `
-        <div class="stock-item p-4 rounded-lg bg-secondary" data-symbol="${stock.symbol}">
+        <div class="stock-item ${cardClass} p-4 rounded-lg bg-secondary max-w-2xl mx-auto" data-symbol="${stock.symbol}">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full ${!stock.logo_url ? stock.color : ''} flex items-center justify-center overflow-hidden" style="min-width: 2.5rem;">
@@ -334,7 +336,7 @@ function renderSearchResults(stocks) {
     }
 
     searchResults.innerHTML = stocks.map(stock => `
-        <div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
+        <div class="flex items-center justify-between p-3 bg-[#1E293B] rounded-lg">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full ${stock.color || 'bg-blue-600'} flex items-center justify-center text-white font-medium">
                     ${stock.symbol[0]}
@@ -363,17 +365,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initStockData();
     updateStockPrices();
     initSearchFunctionality();
+
+    // 監聽視窗大小變化
+    window.addEventListener('resize', () => {
+        renderStocks();
+        renderWatchlist();
+    });
 });
 
 // AI 聊天功能
-let isChatWindowOpen = false;
-
-function toggleChatWindow() {
-    const chatWindow = document.getElementById('chatWindow');
-    isChatWindowOpen = !isChatWindowOpen;
-    chatWindow.style.display = isChatWindowOpen ? 'block' : 'none';
-}
-
 async function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const chatMessages = document.getElementById('chatMessages');
