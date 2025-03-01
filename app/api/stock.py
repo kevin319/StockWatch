@@ -3,12 +3,49 @@ import yfinance as yf
 import yahooquery as yq
 from app.models.db import get_db_connection
 from psycopg2.extras import RealDictCursor
+from datetime import datetime, timedelta
 
 router = APIRouter()
+
+# 記錄最後一次 upsert 的時間
+last_upsert_times = {}
+
+# 記錄 Yahoo Finance 的快取
+yahoo_cache = {}
 
 @router.get("/stockprice/{ticker}")
 async def get_stock_price(ticker: str):
     try:
+        current_time = datetime.now()
+        
+        # 檢查 Yahoo Finance 快取
+        if ticker in yahoo_cache:
+            cache_data = yahoo_cache[ticker]
+            time_diff = current_time - cache_data['timestamp']
+            
+            if time_diff < timedelta(minutes=5):
+                # 先獲取新資料但不儲存，用來比較
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                
+                if info:
+                    current_price = info.get('regularMarketPrice', 0)
+                    prev_close = info.get('previousClose', 0)
+                    price_change = info.get('regularMarketChange', 0)
+                    price_change_percent = info.get('regularMarketChangePercent', 0)
+                    market_state = info.get('marketState', '')
+                    
+                    # 檢查關鍵數據是否相同
+                    cached_data = cache_data['data']
+                    if (current_price == cached_data['price'] and 
+                        prev_close == cached_data['prev_close'] and
+                        price_change == cached_data['price_change'] and
+                        price_change_percent == cached_data['price_change_percent'] and
+                        market_state == cached_data['market_state']):
+                        print(f"使用快取資料: {ticker}")
+                        return cached_data
+        
+        # 如果沒有快取或快取已過期或資料有變化，從 Yahoo Finance 獲取新資料
         stock = yf.Ticker(ticker)
         info = stock.info
         
@@ -56,51 +93,8 @@ async def get_stock_price(ticker: str):
                         extended_change = extended_price - current_price
                         extended_change_percent = (extended_change / current_price) * 100
             
-            # 更新資料到 stock_prices 表
-            try:
-                conn = get_db_connection()
-                cur = conn.cursor()
-                
-                sql = """
-                    INSERT INTO stock_prices (
-                        ticker, price, prev_close, price_change, price_change_percent,
-                        company_name, logo_url, market_state, extended_price,
-                        extended_type, extended_change, extended_change_percent,
-                        last_updated
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
-                    )
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        price = EXCLUDED.price,
-                        prev_close = EXCLUDED.prev_close,
-                        price_change = EXCLUDED.price_change,
-                        price_change_percent = EXCLUDED.price_change_percent,
-                        company_name = EXCLUDED.company_name,
-                        logo_url = EXCLUDED.logo_url,
-                        market_state = EXCLUDED.market_state,
-                        extended_price = EXCLUDED.extended_price,
-                        extended_type = EXCLUDED.extended_type,
-                        extended_change = EXCLUDED.extended_change,
-                        extended_change_percent = EXCLUDED.extended_change_percent,
-                        last_updated = NOW();
-                """
-                
-                cur.execute(sql, (
-                    ticker, current_price, prev_close, price_change, price_change_percent,
-                    company_name, logo_url, market_state, extended_price,
-                    extended_type, extended_change, extended_change_percent
-                ))
-                
-                conn.commit()
-            except Exception as db_error:
-                print(f"資料庫更新錯誤: {str(db_error)}")
-            finally:
-                if 'cur' in locals():
-                    cur.close()
-                if 'conn' in locals():
-                    conn.close()
-            
-            return {
+            # 準備回傳資料
+            response_data = {
                 'ticker': ticker, 
                 'price': current_price,
                 'prev_close': prev_close,
@@ -114,6 +108,67 @@ async def get_stock_price(ticker: str):
                 'extended_change': extended_change,
                 'extended_change_percent': extended_change_percent
             }
+            
+            # 更新 Yahoo Finance 快取
+            yahoo_cache[ticker] = {
+                'timestamp': current_time,
+                'data': response_data
+            }
+            
+            # 檢查是否需要更新資料庫
+            should_update_db = True
+            if ticker in last_upsert_times:
+                time_diff = current_time - last_upsert_times[ticker]
+                if time_diff < timedelta(minutes=10):
+                    should_update_db = False
+            
+            # 如果需要更新資料庫
+            if should_update_db:
+                try:
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    
+                    sql = """
+                        INSERT INTO stock_prices (
+                            ticker, price, prev_close, price_change, price_change_percent,
+                            company_name, logo_url, market_state, extended_price,
+                            extended_type, extended_change, extended_change_percent,
+                            last_updated
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                        )
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            price = EXCLUDED.price,
+                            prev_close = EXCLUDED.prev_close,
+                            price_change = EXCLUDED.price_change,
+                            price_change_percent = EXCLUDED.price_change_percent,
+                            company_name = EXCLUDED.company_name,
+                            logo_url = EXCLUDED.logo_url,
+                            market_state = EXCLUDED.market_state,
+                            extended_price = EXCLUDED.extended_price,
+                            extended_type = EXCLUDED.extended_type,
+                            extended_change = EXCLUDED.extended_change,
+                            extended_change_percent = EXCLUDED.extended_change_percent,
+                            last_updated = NOW();
+                    """
+                    
+                    cur.execute(sql, (
+                        ticker, current_price, prev_close, price_change, price_change_percent,
+                        company_name, logo_url, market_state, extended_price,
+                        extended_type, extended_change, extended_change_percent
+                    ))
+                    
+                    conn.commit()
+                    last_upsert_times[ticker] = current_time
+                except Exception as db_error:
+                    print(f"資料庫更新錯誤: {str(db_error)}")
+                finally:
+                    if 'cur' in locals():
+                        cur.close()
+                    if 'conn' in locals():
+                        conn.close()
+            
+            return response_data
         return {
             'error': '無法獲取股票資訊',
             'ticker': ticker
