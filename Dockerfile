@@ -15,7 +15,7 @@ RUN yarn install && \
     tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify
 
 # 第二階段：Python 應用
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # 設定工作目錄
 WORKDIR /app

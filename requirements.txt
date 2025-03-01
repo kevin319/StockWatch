@@ -8,3 +8,5 @@ google-auth
 google-auth-oauthlib
 python-jose[cryptography]
 python-multipart
+pydantic-settings
+aiohttp
