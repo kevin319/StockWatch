@@ -319,3 +319,40 @@ async def autocomplete(query: str):
     except Exception as e:
         print(f"搜尋時發生錯誤: {str(e)}")
         return []
+
+@router.post("/watchlist/add")
+async def add_to_watchlist(ticker: str, user_email: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+        # 獲取目前最大的 display_order
+        cur.execute("""
+            SELECT COALESCE(MAX(display_order), 0) as max_order 
+            FROM watchlist_stocks 
+            WHERE user_email = %s
+        """, (user_email,))
+        max_order = cur.fetchone()['max_order']
+        
+        # 新增股票到 watchlist
+        cur.execute("""
+            INSERT INTO watchlist_stocks (
+                user_email, 
+                ticker, 
+                display_order,
+                created_at,
+                updated_at
+            )
+            VALUES (%s, %s, %s, NOW(), NOW())
+        """, (user_email, ticker, max_order + 1))
+        
+        conn.commit()
+        return {"message": "成功新增股票到追蹤清單", "ticker": ticker}
+        
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()
