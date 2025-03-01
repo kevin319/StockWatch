@@ -23,44 +23,63 @@ tailwind.config = {
 };
 
 // 股票數據
-let mockStocks = [
-    {
-        symbol: 'CWEB',
-        name: 'Direxion Dly CSI CH',
-        price: 43.63,
-        change: -3.07,
-        preMarket: 40.90,
-        color: 'bg-blue-600',
-        logo_url: ''
-    },
-    {
-        symbol: 'KTEC',
-        name: 'KraneShares Hang',
-        price: 17.40,
-        change: -0.97,
-        preMarket: 17.57,
-        color: 'bg-blue-500',
-        logo_url: ''
-    },
-    {
-        symbol: 'PLTR',
-        name: 'Palantir Techn',
-        price: 84.77,
-        change: -5.08,
-        preMarket: 83.74,
-        color: 'bg-gray-800',
-        logo_url: ''
-    },
-    {
-        symbol: '2330.TW',
-        name: 'Taiwan Semiconductor Manufacturing Company',
-        price: 84.77,
-        change: -5.08,
-        preMarket: 83.74,
-        color: 'bg-gray-800',
-        logo_url: ''
-    }
-];
+let stocks = [];
+
+// 初始化股票數據
+function initStockData() {
+    // 測試數據，格式與 API 返回格式一致
+    stocks = [
+        {
+            ticker: 'CWEB',
+            price: 43.63,
+            prev_close: 44.50,
+            price_change: -0.87,
+            price_change_percent: -1.96,
+            market_state: 'REGULAR',
+            extended_price: 40.90,
+            extended_type: 'PRE_MARKET',
+            extended_change: -2.73,
+            extended_change_percent: -6.25
+        },
+        {
+            ticker: 'KTEC',
+            price: 17.40,
+            prev_close: 17.80,
+            price_change: -0.40,
+            price_change_percent: -2.25,
+            market_state: 'REGULAR',
+            extended_price: 17.57,
+            extended_type: 'PRE_MARKET',
+            extended_change: 0.17,
+            extended_change_percent: 0.98
+        },
+        {
+            ticker: 'PLTR',
+            price: 24.77,
+            prev_close: 25.20,
+            price_change: -0.43,
+            price_change_percent: -1.71,
+            market_state: 'REGULAR',
+            extended_price: 0,
+            extended_type: '',
+            extended_change: 0,
+            extended_change_percent: 0
+        },
+        {
+            ticker: '2330.TW',
+            price: 84.77,
+            prev_close: 85.20,
+            price_change: -0.43,
+            price_change_percent: -0.51,
+            market_state: 'REGULAR',
+            extended_price: 83.74,
+            extended_type: 'PRE_MARKET',
+            extended_change: -1.03,
+            extended_change_percent: -1.21
+        }
+    ];
+    return stocks;
+}
 
 // UI 控制功能
 function toggleMessageModal() {
@@ -150,58 +169,110 @@ function updateStockUI(stockElement, priceData) {
 }
 
 async function updateStockPrices() {
-    for (let stock of mockStocks) {
-        const priceData = await fetchStockPrice(stock.symbol);
-        if (priceData) {
-            stock.price = priceData.price;
-            stock.extended_price = priceData.extended_price;
-            stock.extended_type = priceData.extended_type;
-            stock.extended_change_percent = priceData.extended_change_percent;
-            stock.change = Number(priceData.price_change_percent.toFixed(2));
-            stock.logo_url = priceData.logo_url;
-            stock.name = priceData.company_name || stock.name;
-        }
+    if (!stocks || !stocks.length) return;
+    
+    try {
+        // 更新每個股票的價格
+        const updatedStocks = await Promise.all(stocks.map(async (stock) => {
+            try {
+                const response = await fetch(`/stock/${stock.ticker}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.error) {
+                    console.error(`獲取 ${stock.ticker} 數據失敗:`, data.error);
+                    return stock;
+                }
+                return data;
+            } catch (error) {
+                console.error(`更新 ${stock.ticker} 時發生錯誤:`, error);
+                return stock;
+            }
+        }));
+        
+        // 更新全局股票數據
+        stocks = updatedStocks;
+        
+        // 重新渲染股票列表
+        renderStocks();
+        
+    } catch (error) {
+        console.error('更新股票價格時發生錯誤:', error);
     }
-    renderStocks();
 }
 
 // 渲染股票列表
 function renderStocks() {
     const stockList = document.getElementById('stockList');
-    stockList.innerHTML = mockStocks.map(stock => `
-        <div class="stock-item p-4 rounded-lg bg-secondary" data-symbol="${stock.symbol}">
+    if (!stockList || !stocks) return;
+
+    stockList.innerHTML = stocks.map(stock => `
+        <div class="stock-item p-4 rounded-lg bg-secondary" data-symbol="${stock.ticker}">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full ${!stock.logo_url ? stock.color : ''} flex items-center justify-center overflow-hidden" style="min-width: 2.5rem;">
-                        ${stock.logo_url 
-                            ? `<img src="${stock.logo_url}" alt="${stock.symbol}" class="w-full h-full object-contain bg-white rounded-full p-1" style="aspect-ratio: 1;" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\\'text-white font-medium\\'>${stock.symbol[0]}</span>'; this.parentElement.classList.add('${stock.color}');">` 
-                            : `<span class="text-white font-medium">${stock.symbol[0]}</span>`
-                        }
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden">
+                        <span class="text-white font-medium">${stock.ticker[0]}</span>
                     </div>
                     <div>
-                        <div class="font-medium">${stock.symbol}</div>
-                        <div class="text-sm text-gray-400">${stock.name}</div>
+                        <div class="font-medium">${stock.ticker}</div>
+                        <div class="text-sm text-gray-400">
+                            ${getMarketStateText(stock.market_state)}
+                        </div>
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="font-medium price">${stock.price.toFixed(2)}</div>
-                    <div class="text-sm change ${stock.change >= 0 ? 'price-up' : 'price-down'}">
-                        ${stock.change > 0 ? '+' : ''}${stock.change}%
+                    <div class="text-xl font-bold">
+                        $${stock.price.toFixed(2)}
+                    </div>
+                    <div class="text-sm ${stock.price_change >= 0 ? 'text-green-500' : 'text-red-500'}">
+                        ${stock.price_change >= 0 ? '+' : ''}${stock.price_change.toFixed(2)}
+                        (${stock.price_change_percent.toFixed(2)}%)
                     </div>
                 </div>
             </div>
-            <div class="mt-2 text-sm premarket text-right">
-                ${stock.extended_price ? 
-                    `<span class="${stock.extended_change_percent >= 0 ? 'price-up' : 'price-down'} inline-flex items-center gap-2">
-                        <span class="min-w-[32px]">${stock.extended_type === 'PRE' ? '盤前' : '盤後'}</span>
-                        <span class="inline-block min-w-[50px] text-right">${stock.extended_price.toFixed(2)}</span>
-                        <span class="inline-block min-w-[50px] text-right">${stock.extended_change_percent >= 0 ? '+' : ''}${stock.extended_change_percent.toFixed(2)}%</span>
-                    </span>`
-                    : '<span class="text-gray-400">無延長交易</span>'
-                }
-            </div>
+            ${stock.extended_price ? `
+                <div class="mt-2 text-sm text-right">
+                    <span class="text-gray-400">${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}</span>
+                    <span class="${stock.extended_change >= 0 ? 'text-green-500' : 'text-red-500'}">
+                        $${stock.extended_price.toFixed(2)}
+                        ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
+                        (${stock.extended_change_percent.toFixed(2)}%)
+                    </span>
+                </div>
+            ` : ''}
         </div>
     `).join('');
+
+    // 更新最後更新時間
+    updateLastUpdateTime();
+}
+
+// 獲取市場狀態文字
+function getMarketStateText(state) {
+    const stateMap = {
+        'PRE': '盤前交易',
+        'REGULAR': '一般交易',
+        'POST': '盤後交易',
+        'POSTPOST': '盤後交易',
+        'CLOSED': '已收盤',
+        'PREPRE': '盤前交易',
+        'UNKNOWN': '未知狀態'
+    };
+    return stateMap[state] || state;
+}
+
+// 更新最後更新時間
+function updateLastUpdateTime() {
+    const timeElement = document.getElementById('lastUpdateTime');
+    if (!timeElement) return;
+    
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    
+    timeElement.textContent = `最後更新：${hours}:${minutes}:${seconds}`;
 }
 
 // 渲染自選股列表
@@ -210,7 +281,7 @@ function renderWatchlist() {
     if (!watchlist) return;
 
     watchlist.innerHTML = watchlistStocks.map((symbol, index) => {
-        const stock = mockStocks.find(s => s.symbol === symbol);
+        const stock = stocks.find(s => s.ticker === symbol);
         if (!stock) return '';
 
         return `
@@ -221,11 +292,11 @@ function renderWatchlist() {
                  ondragover="dragOver(event)"
                  ondrop="drop(event)">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full ${stock.color} flex items-center justify-center text-white font-medium">
-                        ${stock.symbol[0]}
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
+                        <span class="text-white font-medium">${stock.ticker[0]}</span>
                     </div>
                     <div>
-                        <div class="font-medium">${stock.symbol}</div>
+                        <div class="font-medium">${stock.ticker}</div>
                         <div class="text-sm text-gray-400">${stock.name}</div>
                     </div>
                 </div>
@@ -247,75 +318,55 @@ function addToWatchlist(symbol) {
 // 搜尋相關功能
 const searchStocks = [
     {
-        symbol: 'AAPL',
+        ticker: 'AAPL',
         name: 'Apple Inc.',
         price: 176.38,
-        change: -0.85,
-        color: 'bg-gray-600'
+        price_change: -0.85,
+        logo_url: ''
     },
     {
-        symbol: 'MSFT',
+        ticker: 'MSFT',
         name: 'Microsoft Corp.',
         price: 406.32,
-        change: -1.23,
-        color: 'bg-blue-600'
+        price_change: -1.23,
+        logo_url: ''
     },
     {
-        symbol: 'NVDA',
+        ticker: 'NVDA',
         name: 'NVIDIA Corp.',
         price: 816.95,
-        change: -2.45,
-        color: 'bg-green-600'
+        price_change: -2.45,
+        logo_url: ''
     }
 ];
 
 // 搜尋功能
 function initSearchFunctionality() {
     const searchInput = document.getElementById('searchInput');
-    const searchResults = document.getElementById('searchResults');
-    
-    if (!searchInput || !searchResults) {
-        console.error('搜尋相關元素未找到');
-        return;
-    }
+    if (!searchInput) return;
 
-    searchInput.addEventListener('input', async (e) => {
+    let debounceTimer;
+    searchInput.addEventListener('input', (e) => {
         const value = e.target.value.toLowerCase().trim();
-        if (value) {
+        clearTimeout(debounceTimer);
+
+        if (value.length === 0) {
+            document.getElementById('searchResults').style.display = 'none';
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
             try {
-                // 調用後端 API 獲取搜尋建議
                 const response = await fetch(`/autocomplete/${value}`);
-                const data = await response.json();
-                
-                if (data.suggestions && data.suggestions.length > 0) {
-                    // 使用 API 結果
-                    renderSearchResults(data.suggestions);
-                } else {
-                    // 如果 API 沒有結果，使用本地搜尋
-                    const filteredStocks = searchStocks.filter(stock =>
-                        stock.symbol.toLowerCase().includes(value) ||
-                        stock.name.toLowerCase().includes(value)
-                    );
-                    renderSearchResults(filteredStocks);
-                }
-                
-                // 顯示搜尋結果
-                searchResults.classList.remove('hidden');
-                document.querySelector('main').classList.add('mb-[280px]');
+                if (!response.ok) throw new Error('搜尋失敗');
+
+                const results = await response.json();
+                renderSearchResults(results);
             } catch (error) {
                 console.error('搜尋錯誤:', error);
-                // 發生錯誤時使用本地搜尋
-                const filteredStocks = searchStocks.filter(stock =>
-                    stock.symbol.toLowerCase().includes(value) ||
-                    stock.name.toLowerCase().includes(value)
-                );
-                renderSearchResults(filteredStocks);
+                showError('搜尋時發生錯誤');
             }
-        } else {
-            // 清空搜尋時隱藏結果
-            searchResults.classList.add('hidden');
-            document.querySelector('main').classList.remove('mb-[280px]');
-        }
+        }, 300);
     });
 }
 
@@ -324,43 +375,68 @@ function renderSearchResults(stocks) {
     const searchResults = document.getElementById('searchResults');
     if (!searchResults) return;
 
-    if (stocks.length === 0) {
-        searchResults.innerHTML = `
-            <div class="p-3 text-center text-gray-400">
-                沒有找到相關股票
-            </div>
-        `;
-        return;
-    }
-
     searchResults.innerHTML = stocks.map(stock => `
         <div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full ${stock.color || 'bg-blue-600'} flex items-center justify-center text-white font-medium">
-                    ${stock.symbol[0]}
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+                    <span class="text-white font-medium">${stock.ticker[0]}</span>
                 </div>
                 <div>
-                    <div class="font-medium">${stock.symbol}</div>
-                    <div class="text-sm text-gray-400">${stock.name}</div>
+                    <div class="font-medium">${stock.ticker}</div>
+                    <div class="text-sm ${stock.price_change >= 0 ? 'text-green-500' : 'text-red-500'}">
+                        $${stock.price.toFixed(2)}
+                        ${stock.price_change >= 0 ? '+' : ''}${stock.price_change.toFixed(2)}%
+                    </div>
                 </div>
             </div>
-            <button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.symbol}')">
+            <button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.ticker}')">
                 <i class="ri-add-line text-gray-400"></i>
             </button>
         </div>
     `).join('');
+
+    searchResults.style.display = stocks.length > 0 ? 'block' : 'none';
 }
 
-// 初始化
-async function initStockData() {
-    await renderStocks();
-    // 每 10 秒更新一次股價
-    setInterval(updateStockPrices, 10000);
+// 股票數據初始化邏輯
+async function initializeStocks() {
+    try {
+        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        if (!userInfo || !userInfo.email) {
+            console.error('未找到用戶資訊');
+            return;
+        }
+
+        const response = await fetch(`/watchlist/${userInfo.email}`);
+        if (!response.ok) {
+            throw new Error('獲取自選股列表失敗');
+        }
+
+        const newStocks = await response.json();
+        if (!Array.isArray(newStocks)) {
+            throw new Error('無效的股票數據格式');
+        }
+
+        // 更新全局股票數據
+        stocks = newStocks.length > 0 ? newStocks : initStockData();
+        
+        // 更新股票列表顯示
+        renderStocks();
+        
+        // 每 10 秒更新一次股價
+        setInterval(updateStockPrices, 10000);
+    } catch (error) {
+        console.error('初始化股票數據時發生錯誤:', error);
+        // 如果 API 調用失敗，使用測試數據
+        stocks = initStockData();
+        renderStocks();
+        showError('載入股票數據失敗，使用測試數據');
+    }
 }
 
-// 在頁面載入時初始化
+// 在頁面載入時初始化股票數據
 document.addEventListener('DOMContentLoaded', () => {
-    initStockData();
+    initializeStocks();
     updateStockPrices();
     initSearchFunctionality();
 });

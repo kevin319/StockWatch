@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 import yfinance as yf
 import yahooquery as yq
+from app.models.db import get_db_connection
+from psycopg2.extras import RealDictCursor
 
 router = APIRouter()
 
@@ -73,6 +75,104 @@ async def get_stock_price(ticker: str):
             'error': str(e),
             'ticker': ticker
         }
+
+@router.get("/stock/{ticker}")
+async def get_stock(ticker: str):
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        if info:
+            current_price = info.get('regularMarketPrice', 0)
+            prev_close = info.get('previousClose', 0)
+            price_change = info.get('regularMarketChange', 0)
+            price_change_percent = info.get('regularMarketChangePercent', 0)
+            market_state = info.get('marketState', 'REGULAR')
+            
+            # 獲取盤前/盤後資料
+            extended_price = None
+            extended_type = None
+            extended_change = None
+            extended_change_percent = None
+            
+            # 盤前交易
+            if market_state == 'PRE' and 'preMarketPrice' in info:
+                extended_price = float(info['preMarketPrice'])
+                extended_type = 'PRE_MARKET'
+                if prev_close:
+                    extended_change = extended_price - prev_close
+                    extended_change_percent = (extended_change / prev_close) * 100
+            
+            # 盤後交易（包括 CLOSED 狀態）
+            elif (market_state in ['POST', 'POSTPOST', 'CLOSED']) and 'postMarketPrice' in info:
+                post_price = info['postMarketPrice']
+                if post_price and isinstance(post_price, (int, float)) and post_price > 0:
+                    extended_price = float(post_price)
+                    extended_type = 'AFTER_HOURS'
+                    if current_price:
+                        extended_change = extended_price - current_price
+                        extended_change_percent = (extended_change / current_price) * 100
+            
+            return {
+                'ticker': ticker,
+                'price': current_price,
+                'prev_close': prev_close,
+                'price_change': price_change,
+                'price_change_percent': price_change_percent,
+                'market_state': market_state,
+                'extended_price': extended_price,
+                'extended_type': extended_type,
+                'extended_change': extended_change,
+                'extended_change_percent': extended_change_percent
+            }
+        return {
+            'error': '無法獲取股票資訊',
+            'ticker': ticker
+        }
+    except Exception as e:
+        return {
+            'error': str(e),
+            'ticker': ticker
+        }
+
+@router.get("/watchlist/{user_email}")
+async def get_watchlist(user_email: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 獲取用戶的自選股列表
+        sql = """
+            SELECT 
+                ws.ticker,
+                ws.display_order,
+                COALESCE(sp.price, 0) as price,
+                COALESCE(sp.prev_close, 0) as prev_close,
+                COALESCE(sp.price_change, 0) as price_change,
+                COALESCE(sp.price_change_percent, 0) as price_change_percent,
+                COALESCE(sp.market_state, '') as market_state,
+                COALESCE(sp.extended_price, 0) as extended_price,
+                COALESCE(sp.extended_type, '') as extended_type,
+                COALESCE(sp.extended_change, 0) as extended_change,
+                COALESCE(sp.extended_change_percent, 0) as extended_change_percent
+            FROM watchlist_stocks ws
+            LEFT JOIN stock_prices sp ON ws.ticker = sp.ticker
+            WHERE ws.user_email = %s
+            ORDER BY ws.display_order;
+        """
+        
+        cur.execute(sql, (user_email,))
+        stocks = cur.fetchall()
+        
+        return [dict(stock) for stock in stocks]
+    except Exception as e:
+        print(f"獲取自選股列表時發生錯誤: {str(e)}")
+        return []
+    finally:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()
 
 @router.get("/autocomplete/{query}")
 async def autocomplete(query: str):
