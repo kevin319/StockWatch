@@ -215,65 +215,68 @@ async function updateStockPrices() {
 // 渲染股票列表
 function renderStocks() {
     const stockList = document.getElementById('stockList');
-    if (!stockList || !stocks) return;
+    stockList.innerHTML = '';
 
-    stockList.innerHTML = stocks.map(stock => `
-        <div class="stock-item p-4 rounded-lg bg-secondary" data-symbol="${stock.ticker}">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden relative">
-                        ${stock.logo_url ? 
-                            `<img src="${stock.logo_url}" alt="${stock.ticker} logo" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\'text-white font-medium\'>${stock.ticker.split('.')[0][0]}</span>'">` :
-                            `<span class="text-white font-medium">${stock.ticker.split('.')[0][0]}</span>`
-                        }
-                    </div>
-                    <div>
-                        <div class="font-medium">${stock.ticker}</div>
-                        <div class="text-sm text-gray-500">${stock.company_name || ''}</div>
-                        <div class="text-sm text-gray-400">
-                            ${getMarketStateText(stock.market_state)}
+    stocks.forEach((stock, index) => {
+        const priceChangeClass = stock.price_change >= 0 ? 'price-up' : 'price-down';
+        const priceChangeIcon = stock.price_change >= 0 ? 'ri-arrow-up-s-fill' : 'ri-arrow-down-s-fill';
+
+        const stockItem = document.createElement('div');
+        stockItem.className = 'stock-item bg-secondary rounded-lg p-4';
+        stockItem.innerHTML = `
+            <div class="flex items-start">
+                <div class="flex items-start gap-3 w-full">
+                    <img src="${stock.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(stock.ticker)}&background=random&color=fff`}" 
+                         alt="${stock.company_name}" 
+                         class="w-10 h-10 rounded-full object-cover bg-gray-700 overflow-hidden">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${stock.ticker}</span>
+                            <span class="text-sm text-gray-400">${stock.company_name}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-lg font-medium">$${stock.price.toFixed(2)}</span>
+                            <div class="flex items-center ${priceChangeClass}">
+                                <i class="${priceChangeIcon}"></i>
+                                <span>${Math.abs(stock.price_change_percent).toFixed(2)}%</span>
+                            </div>
+                            <span class="text-xs text-gray-400 ml-2">${getMarketStateText(stock.market_state)}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1 text-sm">
+                            <span class="text-gray-400">
+                                ${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}: 
+                                ${stock.extended_price ? 
+                                    `$${stock.extended_price.toFixed(2)} 
+                                    <span class="${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
+                                        ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
+                                        (${stock.extended_change_percent.toFixed(2)}%)
+                                    </span>` : 
+                                    '暫無資料'
+                                }
+                            </span>
                         </div>
                     </div>
                 </div>
-                <div class="text-right">
-                    <div class="text-xl font-bold">
-                        $${stock.price.toFixed(2)}
-                    </div>
-                    <div class="text-sm ${stock.price_change >= 0 ? 'text-green-500' : 'text-red-500'}">
-                        ${stock.price_change >= 0 ? '+' : ''}${stock.price_change.toFixed(2)}
-                        (${stock.price_change_percent.toFixed(2)}%)
-                    </div>
-                </div>
             </div>
-            ${stock.extended_price ? `
-                <div class="mt-2 text-sm text-right">
-                    <span class="text-gray-400">${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}</span>
-                    <span class="${stock.extended_change >= 0 ? 'text-green-500' : 'text-red-500'}">
-                        $${stock.extended_price.toFixed(2)}
-                        ${stock.extended_change >= 0 ? '+' : ''}${stock.extended_change.toFixed(2)}
-                        (${stock.extended_change_percent.toFixed(2)}%)
-                    </span>
-                </div>
-            ` : ''}
-        </div>
-    `).join('');
-
-    // 更新最後更新時間
-    updateLastUpdateTime();
+        `;
+        stockList.appendChild(stockItem);
+    });
 }
 
 // 獲取市場狀態文字
 function getMarketStateText(state) {
-    const stateMap = {
-        'PRE': '盤前交易',
-        'REGULAR': '一般交易',
-        'POST': '盤後交易',
-        'POSTPOST': '盤後交易',
-        'CLOSED': '已收盤',
-        'PREPRE': '盤前交易',
-        'UNKNOWN': '未知狀態'
-    };
-    return stateMap[state] || state;
+    switch (state) {
+        case 'PRE_MARKET':
+            return '盤前交易';
+        case 'REGULAR':
+            return '交易中';
+        case 'POST_MARKET':
+            return '盤後交易';
+        case 'CLOSED':
+            return '已收盤';
+        default:
+            return '未知狀態';
+    }
 }
 
 // 更新最後更新時間

@@ -37,17 +37,21 @@ async def get_stock_price(ticker: str):
             extended_change = None
             extended_change_percent = None
             
+            # 處理盤前交易
             if market_state == 'PRE':
                 if 'preMarketPrice' in info and info['preMarketPrice']:
                     extended_price = float(info['preMarketPrice'])
-                    extended_type = 'PRE'
+                    extended_type = 'PRE_MARKET'
                     if prev_close and extended_price:
                         extended_change = extended_price - prev_close
                         extended_change_percent = (extended_change / prev_close) * 100
-            elif market_state == 'POST' or market_state == 'POSTPOST':
-                if 'postMarketPrice' in info and info['postMarketPrice']:
-                    extended_price = float(info['postMarketPrice'])
-                    extended_type = 'POST'
+            
+            # 處理盤後交易（包括已收盤狀態）
+            elif market_state in ['POST', 'POSTPOST', 'CLOSED']:
+                post_price = info.get('postMarketPrice')
+                if post_price and isinstance(post_price, (int, float)) and post_price > 0:
+                    extended_price = float(post_price)
+                    extended_type = 'POST_MARKET'
                     if current_price and extended_price:
                         extended_change = extended_price - current_price
                         extended_change_percent = (extended_change / current_price) * 100
