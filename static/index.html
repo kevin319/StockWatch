@@ -74,14 +74,17 @@
             </header>
             <main class="mt-14 px-4">
                 <!-- 用戶資料 -->
-                <div class="flex items-center gap-3 p-4 bg-secondary rounded-lg mb-6">
-                    <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-medium">
-                        J
+                <div class="flex items-center justify-between p-4 bg-secondary rounded-lg mb-6">
+                    <div class="flex items-center gap-3">
+                        <img id="userAvatar" class="w-12 h-12 rounded-full" src="" alt="用戶頭像">
+                        <div>
+                            <div id="userName" class="font-medium">載入中...</div>
+                            <div id="userEmail" class="text-sm text-gray-400">載入中...</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="font-medium">John Smith</div>
-                        <div class="text-sm text-gray-400">john.smith@gmail.com</div>
-                    </div>
+                    <button onclick="logout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm">
+                        登出
+                    </button>
                 </div>
                 <!-- 自選股票列表 -->
                 <div class="mb-4">
@@ -141,6 +144,74 @@
     </div>
 
     <!-- JavaScript -->
+    <script>
+        // 檢查登入狀態
+        window.onload = function() {
+            const token = sessionStorage.getItem('google_token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            // 載入用戶資訊
+            const userInfo = JSON.parse(sessionStorage.getItem('user_info') || '{}');
+            if (userInfo.name) {
+                document.getElementById('userName').textContent = userInfo.name;
+                document.getElementById('userEmail').textContent = userInfo.email;
+                
+                // 處理頭像
+                const avatarImg = document.getElementById('userAvatar');
+                if (userInfo.picture) {
+                    avatarImg.onerror = function() {
+                        // 如果 Google 頭像載入失敗，使用備用頭像
+                        const backgroundColor = getRandomColor();
+                        this.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=${backgroundColor}&color=white`;
+                    };
+                    avatarImg.src = userInfo.picture;
+                } else {
+                    const backgroundColor = getRandomColor();
+                    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=${backgroundColor}&color=white`;
+                }
+            }
+
+            // 驗證 token
+            fetch(`/verify_token?token=${token}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Token 驗證失敗');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.valid) {
+                        logout();
+                    }
+                })
+                .catch((error) => {
+                    console.error('驗證錯誤:', error);
+                    logout();
+                });
+        };
+
+        // 登出功能
+        function logout() {
+            sessionStorage.removeItem('google_token');
+            sessionStorage.removeItem('user_info');
+            window.location.href = '/';
+        }
+
+        // 取得隨機顏色
+        function getRandomColor() {
+            const colors = ['#3498db', '#f1c40f', '#2ecc71', '#e74c3c', '#9b59b6'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+    </script>
     <script src="/static/main.js"></script>
 </body>
 </html>

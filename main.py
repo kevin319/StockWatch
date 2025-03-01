@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,10 +8,17 @@ from google.auth.transport import requests
 import os
 import yahooquery as yq
 from pydantic import BaseModel
-from dotenv import load_dotenv  # 新增：讀取 .env 檔案
+from dotenv import load_dotenv
+from fastapi.security import HTTPBearer
+from typing import Optional
+from jose import jwt
+from datetime import datetime, timedelta
 
 # 載入 .env 檔案
 load_dotenv()
+
+# 在程式開始時印出環境變數，用於偵錯
+print("GOOGLE_CLIENT_ID:", os.getenv("GOOGLE_CLIENT_ID"))
 
 app = FastAPI()
 
@@ -22,10 +29,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# 設定靜態文件
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# 設定靜態文件，允許跨域訪問
+app.mount("/static", StaticFiles(directory="static", check_dir=False), name="static")
 
 # Gemini API 配置（從環境變數讀取）
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -38,16 +46,76 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 if not GOOGLE_CLIENT_ID:
     raise ValueError("GOOGLE_CLIENT_ID 未在 .env 檔案中設定")
 
+# JWT 設定
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")  # 請在 .env 中設定實際的密鑰
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+security = HTTPBearer()
+
 # 定義請求模型
 class ChatRequest(BaseModel):
     message: str
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = None):
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="未提供認證憑證"
+        )
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(
+                status_code=401,
+                detail="無效的認證憑證"
+            )
+        return email
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="認證憑證已過期"
+        )
+    except jwt.JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="無法驗證認證憑證"
+        )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 @app.get("/")
 async def read_root():
     return FileResponse("static/login.html")
 
 @app.get("/home")
-async def read_home():
+async def read_home(request: Request):
+    # 檢查是否有 state 和 code 參數（Google OAuth2 重定向）
+    state = request.query_params.get("state")
+    code = request.query_params.get("code")
+    
+    if state and code:
+        # 處理 OAuth 重定向
+        try:
+            # 驗證 state（可以添加額外的安全檢查）
+            return FileResponse("static/index.html")
+        except Exception as e:
+            return HTTPException(status_code=401, detail="驗證失敗")
+    
     return FileResponse("static/index.html")
 
 @app.get("/verify_token")
@@ -259,6 +327,17 @@ async def chat(request: ChatRequest):
         return {"reply": reply}
     else:
         return {"reply": f"錯誤：無法連接到 Gemini API ({response.status_code})"}
+
+@app.get("/api/config")
+async def get_config():
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        print("警告：無法從環境變數讀取 GOOGLE_CLIENT_ID")
+        # 暫時使用硬編碼的值
+        client_id = "167754876375-r3qvd9ai1e872mgqr6q7v2st90v8phb6.apps.googleusercontent.com"
+    return {
+        "google_client_id": client_id
+    }
 
 if __name__ == "__main__":
     import uvicorn
