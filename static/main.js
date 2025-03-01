@@ -531,7 +531,7 @@ async function sendMessage() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     try {
-        const response = await fetch('/chat', {
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -541,27 +541,19 @@ async function sendMessage() {
         
         const data = await response.json();
         
-        // 移除載入中動畫
-        chatMessages.removeChild(loadingDiv);
-        
         // 添加 AI 回覆
         const aiMessageDiv = document.createElement('div');
         aiMessageDiv.className = 'mb-4';
         aiMessageDiv.innerHTML = `
             <div class="flex">
                 <div class="bg-gray-700 text-white rounded-lg py-2 px-4 max-w-[80%]">
-                    ${escapeHtml(data.reply)}
+                    ${escapeHtml(data.response)}
                 </div>
             </div>
         `;
         chatMessages.appendChild(aiMessageDiv);
         
-        // 滾動到底部
-        chatMessages.scrollTop = chatMessages.scrollHeight;
     } catch (error) {
-        // 移除載入中動畫
-        chatMessages.removeChild(loadingDiv);
-        
         // 顯示錯誤訊息
         const errorDiv = document.createElement('div');
         errorDiv.className = 'mb-4';
@@ -573,6 +565,14 @@ async function sendMessage() {
             </div>
         `;
         chatMessages.appendChild(errorDiv);
+    } finally {
+        // 移除載入中動畫
+        if (loadingDiv && loadingDiv.parentNode === chatMessages) {
+            chatMessages.removeChild(loadingDiv);
+        }
+        
+        // 滾動到底部
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 }
 
