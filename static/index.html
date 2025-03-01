@@ -147,7 +147,13 @@
     </div>
 
     <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
+        // 設定 marked 選項
+        marked.setOptions({
+            breaks: true,  // 支援換行
+            gfm: true     // 支援 GitHub Flavored Markdown
+        });
         // 檢查登入狀態
         window.onload = function() {
             const token = sessionStorage.getItem('google_token');
