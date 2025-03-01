@@ -107,8 +107,8 @@ function toggleSettingsPage() {
     
     // 如果設置頁面變為可見，重新渲染自選股列表和所有股票列表
     if (!settingsPage.classList.contains('hidden')) {
-        renderWatchlist();
         renderSettingsStockList();
+        renderStocks();
     }
 }
 
@@ -123,9 +123,6 @@ function renderSettingsStockList() {
         const stockItem = document.createElement('div');
         stockItem.className = 'flex items-center justify-between p-4 bg-secondary rounded-lg';
 
-        // 檢查是否在自選股清單中
-        const isInWatchlist = watchlistStocks.includes(stock.ticker);
-
         stockItem.innerHTML = `
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-blue-600/10 flex items-center justify-center overflow-hidden">
@@ -139,9 +136,9 @@ function renderSettingsStockList() {
                     <div class="text-sm text-gray-400">${stock.company_name}</div>
                 </div>
             </div>
-            <button onclick="${isInWatchlist ? `removeStock('${stock.ticker}')` : `addToWatchlist('${stock.ticker}')`}" 
-                    class="w-8 h-8 flex items-center justify-center ${isInWatchlist ? 'text-red-500 hover:bg-red-500/10' : 'text-blue-500 hover:bg-blue-500/10'} rounded-lg">
-                <i class="ri-${isInWatchlist ? 'delete-bin-line' : 'add-line'}"></i>
+            <button onclick="removeStock('${stock.ticker}')" 
+                    class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
+                <i class="ri-delete-bin-line"></i>
             </button>
         `;
 
@@ -149,22 +146,16 @@ function renderSettingsStockList() {
     });
 }
 
-// 自選股清單管理
-let watchlistStocks = [];
-
+// 移除股票
 function removeStock(ticker) {
-    const index = watchlistStocks.indexOf(ticker);
+    // 從本地數據中移除
+    const index = stocks.findIndex(s => s.ticker === ticker);
     if (index >= 0) {
-        watchlistStocks.splice(index, 1);
-        
-        // 更新 localStorage
-        localStorage.setItem('watchlistStocks', JSON.stringify(watchlistStocks));
-        
+        stocks.splice(index, 1);
         // 更新介面
-        renderWatchlist();
         renderSettingsStockList();
         renderStocks();
-        
+
         // 呼叫後端 API 移除股票
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
         if (userInfo && userInfo.email) {
@@ -174,6 +165,48 @@ function removeStock(ticker) {
                 console.error('移除股票時發生錯誤:', error);
             });
         }
+    }
+}
+
+async function addToWatchlist(ticker) {
+    try {
+        // 檢查是否已在股票清單中
+        if (stocks.some(stock => stock.ticker === ticker)) {
+            throw new Error('此股票已在清單中');
+        }
+
+        // 獲取使用者資訊
+        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        if (!userInfo || !userInfo.email) {
+            throw new Error('找不到使用者資訊');
+        }
+
+        // 呼叫後端 API 新增股票
+        const response = await fetch(`/watchlist/add?ticker=${ticker}&user_email=${userInfo.email}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || '新增股票失敗');
+        }
+
+        // 獲取股票資訊
+        const stockResponse = await fetch(`/stock/${ticker}`);
+        if (!stockResponse.ok) {
+            throw new Error('獲取股票資訊失敗');
+        }
+
+        const stockData = await stockResponse.json();
+        stocks.push(stockData);
+
+        // 更新介面
+        renderStocks();
+        renderSettingsStockList();
+
+    } catch (error) {
+        console.error('新增股票時發生錯誤:', error);
+        alert(error.message || '新增股票失敗');
     }
 }
 
@@ -192,10 +225,10 @@ function dragOver(e) {
 function drop(e) {
     e.preventDefault();
     const dropIndex = e.target.closest('[data-index]').dataset.index;
-    const itemToMove = watchlistStocks[draggedItemIndex];
-    watchlistStocks.splice(draggedItemIndex, 1);
-    watchlistStocks.splice(dropIndex, 0, itemToMove);
-    renderWatchlist();
+    const itemToMove = stocks[draggedItemIndex];
+    stocks.splice(draggedItemIndex, 1);
+    stocks.splice(dropIndex, 0, itemToMove);
+    renderStocks();
 }
 
 // 股票數據管理
@@ -376,258 +409,51 @@ function updateLastUpdateTime() {
         `最後更新：${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// 渲染自選股列表
-function renderWatchlist() {
-    const watchlist = document.getElementById('watchlist');
-    if (!watchlist) return;
-
-    watchlist.innerHTML = watchlistStocks.map((symbol, index) => {
-        const stock = stocks.find(s => s.ticker === symbol);
-        if (!stock) return '';
-
-        return `
-            <div class="flex items-center justify-between p-3 bg-secondary rounded-lg" 
-                 draggable="true" 
-                 data-index="${index}"
-                 ondragstart="dragStart(event)"
-                 ondragover="dragOver(event)"
-                 ondrop="drop(event)">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
-                        <span class="text-white font-medium">${stock.ticker[0]}</span>
-                    </div>
-                    <div>
-                        <div class="font-medium">${stock.ticker}</div>
-                        <div class="text-sm text-gray-400">${stock.name}</div>
-                    </div>
-                </div>
-                <button class="w-8 h-8 flex items-center justify-center" onclick="removeStock(${index})">
-                    <i class="ri-delete-bin-line text-gray-400"></i>
-                </button>
-            </div>
-        `;
-    }).join('');
-}
-
-async function addToWatchlist(symbol) {
-    // 檢查是否已存在於 stocks 中
-    if (stocks.some(s => s.ticker === symbol)) {
-        document.getElementById('searchError').textContent = '已在追蹤列表';
-        return;
-    }
-
-    if (!watchlistStocks.includes(symbol)) {
-        watchlistStocks.push(symbol);
-        renderWatchlist();
-        
-        // 獲取股票資料並添加到 stocks
-        try {
-            const response = await fetch(`/stock/${symbol}`);
-            if (!response.ok) throw new Error('獲取股票資料失敗');
-            
-            const stockData = await response.json();
-            stocks.push({
-                ticker: symbol,
-                price: stockData.price || 0,
-                price_change: stockData.price_change || 0,
-                price_change_percent: stockData.price_change_percent || 0,
-                market_state: stockData.market_state || 'REGULAR',
-                extended_price: stockData.extended_price,
-                extended_type: stockData.extended_type,
-                extended_change: stockData.extended_change,
-                extended_change_percent: stockData.extended_change_percent
-            });
-            renderStocks();
-            
-            // 立即更新所有股票價格
-            updateStockPrices();
-            
-            // 清除搜尋結果
-            const searchInput = document.getElementById('searchInput');
-            const searchResults = document.getElementById('searchResults');
-            if (searchInput) searchInput.value = '';
-            if (searchResults) searchResults.innerHTML = '';
-            document.getElementById('searchError').textContent = '';
-            
-            // 對接 add_to_watchlist API
-            const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
-            if (!userInfo || !userInfo.email) {
-                throw new Error('找不到使用者資訊');
-            }
-
-            const addResponse = await fetch(`/watchlist/add?ticker=${symbol}&user_email=${userInfo.email}`, {
-                method: 'POST'
-            });
-
-            if (!addResponse.ok) {
-                const errorData = await addResponse.json();
-                throw new Error(errorData.error || '新增股票失敗');
-            }
-
-            const addResult = await addResponse.json();
-            if (addResult.message === "此股票已經在您的追蹤清單中") {
-                document.getElementById('searchError').textContent = addResult.message;
-            }
-            
-        } catch (error) {
-            console.error('添加股票時發生錯誤:', error);
-            document.getElementById('searchError').textContent = error.message || '添加股票時發生錯誤';
-            
-            // 如果 API 呼叫失敗，需要回復本地狀態
-            const index = watchlistStocks.indexOf(symbol);
-            if (index > -1) {
-                watchlistStocks.splice(index, 1);
-                renderWatchlist();
-            }
-            
-            const stockIndex = stocks.findIndex(s => s.ticker === symbol);
-            if (stockIndex > -1) {
-                stocks.splice(stockIndex, 1);
-                renderStocks();
-            }
-        }
-    }
-}
-
-// 搜尋相關功能
-const searchStocks = [
-    {
-        ticker: 'AAPL',
-        name: 'Apple Inc.',
-        price: 176.38,
-        price_change: -0.85,
-        logo_url: ''
-    },
-    {
-        ticker: 'MSFT',
-        name: 'Microsoft Corp.',
-        price: 406.32,
-        price_change: -1.23,
-        logo_url: ''
-    },
-    {
-        ticker: 'NVDA',
-        name: 'NVIDIA Corp.',
-        price: 816.95,
-        price_change: -2.45,
-        logo_url: ''
-    }
-];
-
-// 搜尋功能
-function initSearchFunctionality() {
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-
-    // 在搜尋框後添加錯誤訊息元素
-    const errorSpan = document.createElement('span');
-    errorSpan.id = 'searchError';
-    errorSpan.className = 'text-red-500 ml-2';
-    searchInput.parentNode.appendChild(errorSpan);
-
-    let debounceTimer;
-    searchInput.addEventListener('input', async (e) => {
-        const value = e.target.value.trim();
-        
-        // 清除錯誤訊息
-        document.getElementById('searchError').textContent = '';
-
-        // 清除之前的計時器
-        if (debounceTimer) {
-            clearTimeout(debounceTimer);
-        }
-
-        if (!value) {
-            const searchResults = document.getElementById('searchResults');
-            if (searchResults) {
-                searchResults.innerHTML = '';
-            }
-            return;
-        }
-
-        debounceTimer = setTimeout(async () => {
-            try {
-                const response = await fetch(`/autocomplete/${value}`);
-                if (!response.ok) throw new Error('搜尋失敗');
-
-                const results = await response.json();
-                renderSearchResults(results);
-            } catch (error) {
-                console.error('搜尋錯誤:', error);
-                document.getElementById('searchError').textContent = '搜尋時發生錯誤';
-            }
-        }, 300);
-    });
-}
-
-// 渲染搜尋結果
-function renderSearchResults(stocks) {
-    const searchResults = document.getElementById('searchResults');
-    if (!searchResults) return;
-
-    searchResults.innerHTML = stocks.map(stock => `
-        <div class="flex items-center justify-between p-3 bg-secondary rounded-lg">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                    <span class="text-white font-medium">${stock.symbol[0]}</span>
-                </div>
-                <div>
-                    <div class="font-medium">${stock.display}</div>
-                </div>
-            </div>
-            <button class="w-8 h-8 flex items-center justify-center" onclick="addToWatchlist('${stock.symbol}')">
-                <i class="ri-add-line text-gray-400"></i>
-            </button>
-        </div>
-    `).join('');
-
-    searchResults.style.display = stocks.length > 0 ? 'block' : 'none';
-}
-
 // 股票數據初始化邏輯
 async function initializeStocks() {
     try {
+        // 獲取使用者資訊
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) {
-            console.error('未找到用戶資訊');
-            return;
+            throw new Error('找不到使用者資訊');
         }
 
+        // 從後端獲取股票數據
         const response = await fetch(`/watchlist/${userInfo.email}`);
         if (!response.ok) {
-            throw new Error('獲取自選股列表失敗');
+            throw new Error('獲取股票數據失敗');
         }
 
-        const newStocks = await response.json();
-        if (!Array.isArray(newStocks)) {
-            throw new Error('無效的股票數據格式');
+        const stocksData = await response.json();
+        if (Array.isArray(stocksData)) {
+            stocks = stocksData;
+        } else {
+            stocks = initStockData();
         }
 
-        // 更新全局股票數據
-        stocks = newStocks.length > 0 ? newStocks : initStockData();
-        
-        // 更新股票列表顯示
+        // 渲染介面
         renderStocks();
-        
-        // 立即更新一次股價
-        await updateStockPrices();
-        
-        // 每 10 秒更新一次股價
+        renderSettingsStockList();
+
+        // 開始定期更新
+        updateStockPrices();
         setInterval(updateStockPrices, 10000);
+
+        // 更新時間
+        updateLastUpdateTime();
+        setInterval(updateLastUpdateTime, 1000);
+
     } catch (error) {
         console.error('初始化股票數據時發生錯誤:', error);
-        // 如果 API 調用失敗，使用測試數據
         stocks = initStockData();
         renderStocks();
-        document.getElementById('searchError').textContent = '載入股票數據失敗，使用測試數據';
+        renderSettingsStockList();
     }
 }
 
 // 在頁面載入時初始化股票數據
 document.addEventListener('DOMContentLoaded', () => {
     initializeStocks();
-    initSearchFunctionality();
-    updateLastUpdateTime(); // 初始化時更新時間
 });
 
 // AI 聊天功能
