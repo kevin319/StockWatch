@@ -24,7 +24,7 @@ security = HTTPBearer()
 
 # 註冊路由
 app.include_router(auth.router, tags=["auth"])
-app.include_router(stock.router, prefix="/api/stock", tags=["stock"])
+app.include_router(stock.router, tags=["stock"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
 if __name__ == "__main__":
