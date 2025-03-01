@@ -2,58 +2,16 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from google.oauth2 import id_token
 from google.auth.transport import requests
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import logging
 import os
 from dotenv import load_dotenv
+from app.models.db import upsert_user
 
 # 載入環境變數
 load_dotenv()
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-def get_db_connection():
-    return psycopg2.connect(
-        dbname=os.getenv('POSTGRES_DB'),
-        user=os.getenv('POSTGRES_USER'),
-        password=os.getenv('POSTGRES_PASSWORD'),
-        host=os.getenv('POSTGRES_HOST', 'localhost'),
-        port=os.getenv('POSTGRES_PORT', '5432')
-    )
-
-def upsert_user(email: str, name: str, picture: str) -> dict:
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # 使用 INSERT ON CONFLICT 進行 upsert
-        sql = """
-            INSERT INTO users (email, name, picture_url, last_login, created_at, updated_at)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (email) 
-            DO UPDATE SET
-                name = EXCLUDED.name,
-                picture_url = EXCLUDED.picture_url,
-                last_login = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            RETURNING email, name, picture_url;
-        """
-        
-        cur.execute(sql, (email, name, picture))
-        user = cur.fetchone()
-        conn.commit()
-        
-        return dict(user)
-    except Exception as e:
-        logger.error(f"資料庫操作錯誤: {str(e)}")
-        raise HTTPException(status_code=500, detail="資料庫操作錯誤")
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
 
 @router.get("/")
 async def read_root():
@@ -78,11 +36,15 @@ async def verify_token(token: str):
             raise ValueError('錯誤的 Client ID')
 
         # 更新或創建用戶資料
-        user = upsert_user(
-            email=idinfo['email'],
-            name=idinfo.get('name', ''),
-            picture=idinfo.get('picture', '')
-        )
+        try:
+            user = upsert_user(
+                email=idinfo['email'],
+                name=idinfo.get('name', ''),
+                picture=idinfo.get('picture', '')
+            )
+        except Exception as e:
+            logger.error(f"資料庫操作錯誤: {str(e)}")
+            raise HTTPException(status_code=500, detail="資料庫操作錯誤")
 
         return {
             'valid': True,
