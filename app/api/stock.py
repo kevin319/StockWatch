@@ -4,6 +4,8 @@ import yahooquery as yq
 from app.models.db import get_db_connection
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
+from pydantic import BaseModel
+from typing import List
 
 router = APIRouter()
 
@@ -371,6 +373,36 @@ async def remove_from_watchlist(user_email: str, ticker: str):
         
         conn.commit()
         return {"message": "成功從追蹤清單移除股票", "ticker": ticker}
+        
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()
+
+class ReorderRequest(BaseModel):
+    user_email: str
+    tickers: List[str]
+
+@router.post("/watchlist/reorder")
+async def reorder_watchlist(request: ReorderRequest):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 更新每個股票的顯示順序
+        for index, ticker in enumerate(request.tickers):
+            cur.execute("""
+                UPDATE watchlist_stocks 
+                SET display_order = %s,
+                    updated_at = NOW()
+                WHERE user_email = %s AND ticker = %s
+            """, (index, request.user_email, ticker))
+        
+        conn.commit()
+        return {"message": "成功更新股票順序"}
         
     except Exception as e:
         return {"error": str(e)}
