@@ -31,6 +31,7 @@ function initStockData() {
     stocks = [
         {
             ticker: 'CWEB',
+            company_name: 'Direxion Daily CSI China Internet Index Bull 2X Shares',
             price: 43.63,
             prev_close: 44.50,
             price_change: -0.87,
@@ -43,6 +44,7 @@ function initStockData() {
         },
         {
             ticker: 'KTEC',
+            company_name: 'Korea Electric Terminal Co., Ltd.',
             price: 17.40,
             prev_close: 17.80,
             price_change: -0.40,
@@ -55,6 +57,7 @@ function initStockData() {
         },
         {
             ticker: 'PLTR',
+            company_name: 'Palantir Technologies Inc.',
             price: 24.77,
             prev_close: 25.20,
             price_change: -0.43,
@@ -67,6 +70,7 @@ function initStockData() {
         },
         {
             ticker: '2330.TW',
+            company_name: '台灣積體電路製造股份有限公司',
             price: 84.77,
             prev_close: 85.20,
             price_change: -0.43,
@@ -175,7 +179,7 @@ async function updateStockPrices() {
         // 更新每個股票的價格
         const updatedStocks = await Promise.all(stocks.map(async (stock) => {
             try {
-                const response = await fetch(`/stock/${stock.ticker}`);
+                const response = await fetch(`/stockprice/${stock.ticker}`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -184,7 +188,13 @@ async function updateStockPrices() {
                     console.error(`獲取 ${stock.ticker} 數據失敗:`, data.error);
                     return stock;
                 }
-                return data;
+                // 合併新數據，但保留原有的資訊作為備用
+                return {
+                    ...stock,  // 保留原有的所有資訊作為備用
+                    ...data,   // 使用新的資訊（包含 company_name 和 logo_url）
+                    company_name: data.company_name || stock.company_name, // 優先使用新的公司名稱
+                    logo_url: data.logo_url || stock.logo_url, // 優先使用新的 logo
+                };
             } catch (error) {
                 console.error(`更新 ${stock.ticker} 時發生錯誤:`, error);
                 return stock;
@@ -211,11 +221,15 @@ function renderStocks() {
         <div class="stock-item p-4 rounded-lg bg-secondary" data-symbol="${stock.ticker}">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden">
-                        <span class="text-white font-medium">${stock.ticker[0]}</span>
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden relative">
+                        ${stock.logo_url ? 
+                            `<img src="${stock.logo_url}" alt="${stock.ticker} logo" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\'text-white font-medium\'>${stock.ticker.split('.')[0][0]}</span>'">` :
+                            `<span class="text-white font-medium">${stock.ticker.split('.')[0][0]}</span>`
+                        }
                     </div>
                     <div>
                         <div class="font-medium">${stock.ticker}</div>
+                        <div class="text-sm text-gray-500">${stock.company_name || ''}</div>
                         <div class="text-sm text-gray-400">
                             ${getMarketStateText(stock.market_state)}
                         </div>
@@ -423,6 +437,9 @@ async function initializeStocks() {
         // 更新股票列表顯示
         renderStocks();
         
+        // 立即更新一次股價
+        await updateStockPrices();
+        
         // 每 10 秒更新一次股價
         setInterval(updateStockPrices, 10000);
     } catch (error) {
@@ -437,7 +454,6 @@ async function initializeStocks() {
 // 在頁面載入時初始化股票數據
 document.addEventListener('DOMContentLoaded', () => {
     initializeStocks();
-    updateStockPrices();
     initSearchFunctionality();
 });
 
