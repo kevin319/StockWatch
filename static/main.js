@@ -121,21 +121,8 @@ function renderSettingsStockList() {
 
     stocks.forEach((stock, index) => {
         const stockItem = document.createElement('div');
-        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2 cursor-move touch-manipulation';
-        stockItem.draggable = true;
+        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2';
         stockItem.dataset.index = index;
-
-        // 添加拖放事件監聽器
-        stockItem.addEventListener('dragstart', handleDragStart);
-        stockItem.addEventListener('dragover', handleDragOver);
-        stockItem.addEventListener('drop', handleDrop);
-        stockItem.addEventListener('dragenter', handleDragEnter);
-        stockItem.addEventListener('dragleave', handleDragLeave);
-
-        // 添加觸控事件監聽器
-        stockItem.addEventListener('touchstart', handleTouchStart, { passive: false });
-        stockItem.addEventListener('touchmove', handleTouchMove, { passive: false });
-        stockItem.addEventListener('touchend', handleTouchEnd);
 
         stockItem.innerHTML = `
             <div class="flex items-center gap-4">
@@ -152,7 +139,9 @@ function renderSettingsStockList() {
                     <div class="text-sm text-gray-400">${stock.company_name}</div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <i class="ri-drag-move-line text-gray-400"></i>
+                    <div class="drag-handle cursor-move w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-300 hover:bg-gray-700/50 rounded-lg">
+                        <i class="ri-menu-line"></i>
+                    </div>
                     <button type="button" 
                             class="delete-stock-btn w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg"
                             data-ticker="${stock.ticker}">
@@ -170,6 +159,12 @@ function renderSettingsStockList() {
             const ticker = e.currentTarget.dataset.ticker;
             removeStock(ticker);
         });
+
+        // 為拖拉把手添加觸控事件
+        const dragHandle = stockItem.querySelector('.drag-handle');
+        dragHandle.addEventListener('touchstart', handleTouchStart, { passive: false });
+        dragHandle.addEventListener('touchmove', handleTouchMove, { passive: false });
+        dragHandle.addEventListener('touchend', handleTouchEnd);
 
         stockListContainer.appendChild(stockItem);
     });
@@ -264,37 +259,33 @@ async function addToWatchlist(ticker) {
 
 // 觸控事件處理函數
 function handleTouchStart(e) {
-    // 如果是點擊刪除按鈕，不觸發拖動
-    if (e.target.closest('.delete-stock-btn')) {
-        return;
-    }
-    
     e.preventDefault();
     e.stopPropagation();
     
     const touch = e.touches[0];
-    const item = e.target.closest('.stock-item');
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
     
-    if (item) {
-        touchStartY = touch.clientY;
-        currentTouchItem = item;
-        draggedItemIndex = parseInt(item.dataset.index);
-        
-        // 記錄初始位置
-        const rect = item.getBoundingClientRect();
-        item.style.position = 'relative';
-        item.style.zIndex = '1000';
-        item.style.backgroundColor = '#1E293B';
-        item.classList.add('touch-dragging');
-        
-        // 重置其他項目的狀態
-        const items = document.querySelectorAll('.stock-item');
-        items.forEach(i => {
-            if (i !== item) {
-                i.style.transition = 'transform 0.3s ease';
-            }
-        });
-    }
+    const item = handle.closest('.stock-item');
+    if (!item) return;
+    
+    touchStartY = touch.clientY;
+    currentTouchItem = item;
+    draggedItemIndex = parseInt(item.dataset.index);
+    
+    // 記錄初始位置
+    item.style.position = 'relative';
+    item.style.zIndex = '1000';
+    item.style.backgroundColor = '#1E293B';
+    item.classList.add('touch-dragging');
+    
+    // 重置其他項目的狀態
+    const items = document.querySelectorAll('.stock-item');
+    items.forEach(i => {
+        if (i !== item) {
+            i.style.transition = 'transform 0.3s ease';
+        }
+    });
 }
 
 function handleTouchMove(e) {
