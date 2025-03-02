@@ -233,6 +233,31 @@ async function addToWatchlist(ticker) {
 
     } catch (error) {
         console.error('新增股票時發生錯誤:', error);
+        const searchInput = document.getElementById('searchInput');
+        searchInput.value = '';
+        searchInput.style.color = '#ef4444';
+        searchInput.placeholder = error.message;
+        searchInput.style.setProperty('::placeholder', '#ef4444', 'important');
+        
+        // 新增一個 style 元素來處理 placeholder 顏色
+        let style = document.createElement('style');
+        style.id = 'searchInputError';
+        style.textContent = `
+            #searchInput::placeholder {
+                color: #ef4444 !important;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        setTimeout(() => {
+            searchInput.style.color = 'white';
+            searchInput.placeholder = '搜尋股票代號或名稱';
+            // 移除錯誤樣式
+            const errorStyle = document.getElementById('searchInputError');
+            if (errorStyle) {
+                errorStyle.remove();
+            }
+        }, 3000);
     }
 }
 
