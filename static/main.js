@@ -121,15 +121,21 @@ function renderSettingsStockList() {
 
     stocks.forEach((stock, index) => {
         const stockItem = document.createElement('div');
-        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2 cursor-move';
+        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2 cursor-move touch-manipulation';
         stockItem.draggable = true;
         stockItem.dataset.index = index;
 
+        // 添加拖放事件監聽器
         stockItem.addEventListener('dragstart', handleDragStart);
         stockItem.addEventListener('dragover', handleDragOver);
         stockItem.addEventListener('drop', handleDrop);
         stockItem.addEventListener('dragenter', handleDragEnter);
         stockItem.addEventListener('dragleave', handleDragLeave);
+
+        // 添加觸控事件監聽器
+        stockItem.addEventListener('touchstart', handleTouchStart, { passive: false });
+        stockItem.addEventListener('touchmove', handleTouchMove, { passive: false });
+        stockItem.addEventListener('touchend', handleTouchEnd);
 
         stockItem.innerHTML = `
             <div class="flex items-center gap-4">
@@ -147,13 +153,23 @@ function renderSettingsStockList() {
                 </div>
                 <div class="flex items-center gap-2">
                     <i class="ri-drag-move-line text-gray-400"></i>
-                    <button onclick="removeStock('${stock.ticker}')" 
-                            class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg">
+                    <button type="button" 
+                            class="delete-stock-btn w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg"
+                            data-ticker="${stock.ticker}">
                         <i class="ri-delete-bin-line"></i>
                     </button>
                 </div>
             </div>
         `;
+
+        // 為刪除按鈕添加點擊事件
+        const deleteBtn = stockItem.querySelector('.delete-stock-btn');
+        deleteBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const ticker = e.currentTarget.dataset.ticker;
+            removeStock(ticker);
+        });
 
         stockListContainer.appendChild(stockItem);
     });
@@ -189,6 +205,7 @@ async function removeStock(ticker) {
     }
 }
 
+// 新增股票到追蹤清單
 async function addToWatchlist(ticker) {
     try {
         // 檢查是否已在股票清單中
@@ -261,9 +278,32 @@ async function addToWatchlist(ticker) {
     }
 }
 
+// 觸控事件處理函數
+function handleTouchStart(e) {
+    // 如果是點擊刪除按鈕，不觸發拖動
+    if (e.target.closest('.delete-stock-btn')) {
+        return;
+    }
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    const item = e.target.closest('.stock-item');
+    
+    if (item) {
+        touchStartY = touch.pageY;
+        currentTouchItem = item;
+        draggedItemIndex = parseInt(item.dataset.index);
+        
+        item.classList.add('opacity-50');
+        item.classList.add('touch-dragging');
+    }
+}
+
 // 拖拉相關變數
 let draggedItem = null;
 let draggedItemIndex = null;
+let touchStartY = null;
+let currentTouchItem = null;
 
 // 拖拉事件處理函數
 function handleDragStart(e) {
@@ -313,6 +353,69 @@ function handleDrop(e) {
 
     // 更新後端
     updateStockOrder();
+}
+
+// 觸控事件處理函數
+function handleTouchMove(e) {
+    e.preventDefault();
+    if (!currentTouchItem || !touchStartY) return;
+
+    const touch = e.touches[0];
+    const moveY = touch.pageY - touchStartY;
+    
+    // 設置拖動元素的位置
+    currentTouchItem.style.transform = `translateY(${moveY}px)`;
+    
+    // 檢查是否需要重新排序
+    const itemHeight = currentTouchItem.offsetHeight;
+    const containerRect = document.getElementById('settingsStockList').getBoundingClientRect();
+    const touchY = touch.clientY - containerRect.top;
+    
+    // 找到目標位置
+    const items = Array.from(document.querySelectorAll('.stock-item'));
+    items.forEach((item, index) => {
+        if (item !== currentTouchItem) {
+            const itemRect = item.getBoundingClientRect();
+            const itemMiddle = itemRect.top + itemRect.height / 2 - containerRect.top;
+            
+            item.classList.remove('bg-blue-500/10');
+            if (touchY > itemMiddle - itemHeight / 2 && touchY < itemMiddle + itemHeight / 2) {
+                item.classList.add('bg-blue-500/10');
+            }
+        }
+    });
+}
+
+function handleTouchEnd(e) {
+    if (!currentTouchItem) return;
+    
+    const items = Array.from(document.querySelectorAll('.stock-item'));
+    const targetItem = items.find(item => item.classList.contains('bg-blue-500/10'));
+    
+    if (targetItem) {
+        const dropIndex = parseInt(targetItem.dataset.index);
+        
+        // 使用原有的排序邏輯
+        const itemToMove = stocks[draggedItemIndex];
+        stocks.splice(draggedItemIndex, 1);
+        stocks.splice(dropIndex, 0, itemToMove);
+
+        // 更新介面
+        renderSettingsStockList();
+        renderStocks();
+
+        // 更新後端
+        updateStockOrder();
+    }
+    
+    // 清理狀態
+    currentTouchItem.style.transform = '';
+    currentTouchItem.classList.remove('opacity-50', 'touch-dragging');
+    items.forEach(item => item.classList.remove('bg-blue-500/10'));
+    
+    currentTouchItem = null;
+    touchStartY = null;
+    draggedItemIndex = null;
 }
 
 // 更新後端股票順序
