@@ -251,30 +251,14 @@ async function addToWatchlist(ticker) {
     } catch (error) {
         console.error('新增股票時發生錯誤:', error);
         const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        
+        // 顯示錯誤提示
+        showToast(error.message);
+        
+        // 清空搜尋框並隱藏結果
         searchInput.value = '';
-        searchInput.style.color = '#ef4444';
-        searchInput.placeholder = error.message;
-        searchInput.style.setProperty('::placeholder', '#ef4444', 'important');
-        
-        // 新增一個 style 元素來處理 placeholder 顏色
-        let style = document.createElement('style');
-        style.id = 'searchInputError';
-        style.textContent = `
-            #searchInput::placeholder {
-                color: #ef4444 !important;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        setTimeout(() => {
-            searchInput.style.color = 'white';
-            searchInput.placeholder = '搜尋股票代號或名稱';
-            // 移除錯誤樣式
-            const errorStyle = document.getElementById('searchInputError');
-            if (errorStyle) {
-                errorStyle.remove();
-            }
-        }, 3000);
+        searchResults.classList.add('hidden');
     }
 }
 
@@ -286,17 +270,110 @@ function handleTouchStart(e) {
     }
     
     e.preventDefault();
+    e.stopPropagation();
+    
     const touch = e.touches[0];
     const item = e.target.closest('.stock-item');
     
     if (item) {
-        touchStartY = touch.pageY;
+        touchStartY = touch.clientY;
         currentTouchItem = item;
         draggedItemIndex = parseInt(item.dataset.index);
         
-        item.classList.add('opacity-50');
+        // 記錄初始位置
+        const rect = item.getBoundingClientRect();
+        item.style.position = 'relative';
+        item.style.zIndex = '1000';
+        item.style.backgroundColor = '#1E293B';
         item.classList.add('touch-dragging');
+        
+        // 重置其他項目的狀態
+        const items = document.querySelectorAll('.stock-item');
+        items.forEach(i => {
+            if (i !== item) {
+                i.style.transition = 'transform 0.3s ease';
+            }
+        });
     }
+}
+
+function handleTouchMove(e) {
+    if (!currentTouchItem || !touchStartY) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const touch = e.touches[0];
+    const moveY = touch.clientY - touchStartY;
+    
+    // 移動當前項目
+    currentTouchItem.style.transform = `translateY(${moveY}px)`;
+    
+    // 獲取所有項目
+    const container = document.getElementById('settingsStockList');
+    const items = Array.from(container.querySelectorAll('.stock-item'));
+    const itemHeight = currentTouchItem.offsetHeight;
+    const currentIndex = items.indexOf(currentTouchItem);
+    
+    // 計算目標位置
+    const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
+    const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+    
+    // 移動其他項目
+    items.forEach((item, index) => {
+        if (item === currentTouchItem) return;
+        
+        if (boundedIndex > currentIndex && index > currentIndex && index <= boundedIndex) {
+            item.style.transform = `translateY(${-itemHeight}px)`;
+        } else if (boundedIndex < currentIndex && index < currentIndex && index >= boundedIndex) {
+            item.style.transform = `translateY(${itemHeight}px)`;
+        } else {
+            item.style.transform = '';
+        }
+    });
+}
+
+function handleTouchEnd(e) {
+    if (!currentTouchItem) return;
+    
+    const container = document.getElementById('settingsStockList');
+    const items = Array.from(container.querySelectorAll('.stock-item'));
+    const currentIndex = items.indexOf(currentTouchItem);
+    const moveY = parseFloat(currentTouchItem.style.transform.replace('translateY(', '').replace('px)', '') || 0);
+    const itemHeight = currentTouchItem.offsetHeight;
+    
+    // 計算目標位置
+    const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
+    const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+    
+    if (boundedIndex !== currentIndex) {
+        // 更新數據
+        const itemToMove = stocks[currentIndex];
+        stocks.splice(currentIndex, 1);
+        stocks.splice(boundedIndex, 0, itemToMove);
+        
+        // 更新介面和後端
+        renderSettingsStockList();
+        renderStocks();
+        updateStockOrder();
+    } else {
+        // 重置所有項目的位置
+        items.forEach(item => {
+            item.style.transform = '';
+            item.style.transition = '';
+        });
+    }
+    
+    // 清理狀態
+    currentTouchItem.style.position = '';
+    currentTouchItem.style.zIndex = '';
+    currentTouchItem.style.transform = '';
+    currentTouchItem.style.backgroundColor = '';
+    currentTouchItem.classList.remove('touch-dragging');
+    
+    currentTouchItem = null;
+    touchStartY = null;
+    draggedItemIndex = null;
 }
 
 // 拖拉相關變數
@@ -353,69 +430,6 @@ function handleDrop(e) {
 
     // 更新後端
     updateStockOrder();
-}
-
-// 觸控事件處理函數
-function handleTouchMove(e) {
-    e.preventDefault();
-    if (!currentTouchItem || !touchStartY) return;
-
-    const touch = e.touches[0];
-    const moveY = touch.pageY - touchStartY;
-    
-    // 設置拖動元素的位置
-    currentTouchItem.style.transform = `translateY(${moveY}px)`;
-    
-    // 檢查是否需要重新排序
-    const itemHeight = currentTouchItem.offsetHeight;
-    const containerRect = document.getElementById('settingsStockList').getBoundingClientRect();
-    const touchY = touch.clientY - containerRect.top;
-    
-    // 找到目標位置
-    const items = Array.from(document.querySelectorAll('.stock-item'));
-    items.forEach((item, index) => {
-        if (item !== currentTouchItem) {
-            const itemRect = item.getBoundingClientRect();
-            const itemMiddle = itemRect.top + itemRect.height / 2 - containerRect.top;
-            
-            item.classList.remove('bg-blue-500/10');
-            if (touchY > itemMiddle - itemHeight / 2 && touchY < itemMiddle + itemHeight / 2) {
-                item.classList.add('bg-blue-500/10');
-            }
-        }
-    });
-}
-
-function handleTouchEnd(e) {
-    if (!currentTouchItem) return;
-    
-    const items = Array.from(document.querySelectorAll('.stock-item'));
-    const targetItem = items.find(item => item.classList.contains('bg-blue-500/10'));
-    
-    if (targetItem) {
-        const dropIndex = parseInt(targetItem.dataset.index);
-        
-        // 使用原有的排序邏輯
-        const itemToMove = stocks[draggedItemIndex];
-        stocks.splice(draggedItemIndex, 1);
-        stocks.splice(dropIndex, 0, itemToMove);
-
-        // 更新介面
-        renderSettingsStockList();
-        renderStocks();
-
-        // 更新後端
-        updateStockOrder();
-    }
-    
-    // 清理狀態
-    currentTouchItem.style.transform = '';
-    currentTouchItem.classList.remove('opacity-50', 'touch-dragging');
-    items.forEach(item => item.classList.remove('bg-blue-500/10'));
-    
-    currentTouchItem = null;
-    touchStartY = null;
-    draggedItemIndex = null;
 }
 
 // 更新後端股票順序
@@ -894,3 +908,58 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// 顯示 toast 通知
+function showToast(message, type = 'error') {
+    // 檢查是否已存在 toast 容器
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            width: 100%;
+            max-width: 320px;
+            padding: 0 16px;
+        `;
+        document.body.appendChild(toastContainer);
+    }
+
+    // 創建新的 toast
+    const toast = document.createElement('div');
+    toast.className = type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    toast.style.cssText = `
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.3s ease;
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    `;
+    toast.textContent = message;
+
+    // 添加到容器
+    toastContainer.appendChild(toast);
+
+    // 觸發動畫
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }, 100);
+
+    // 3秒後移除
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            toastContainer.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
