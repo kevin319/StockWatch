@@ -10,13 +10,23 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 def get_db_connection():
-    return psycopg2.connect(
+    """獲取資料庫連接，並設定時區為 Asia/Taipei"""
+    conn = psycopg2.connect(
         dbname=os.getenv('POSTGRES_DB'),
         user=os.getenv('POSTGRES_USER'),
         password=os.getenv('POSTGRES_PASSWORD'),
         host=os.getenv('POSTGRES_HOST', 'localhost'),
         port=os.getenv('POSTGRES_PORT', '5432')
     )
+    
+    # 設定時區為 Asia/Taipei
+    cursor = conn.cursor()
+    cursor.execute("SET timezone = 'Asia/Taipei'")
+    conn.commit()
+    
+    return conn
+
+
 
 def upsert_user(email: str, name: str, picture: str) -> dict:
     """
