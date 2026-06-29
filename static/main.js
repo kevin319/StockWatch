@@ -621,11 +621,12 @@ async function updateStockPrices() {
 /* ═══════ TIME ═══════ */
 
 function updateLastUpdateTime() {
+    const el = document.getElementById('lastUpdateTime');
+    if (!el) return;
+    // 只在實際刷新時更新，顯示到分（不再每秒跳動）
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
-    document.getElementById('lastUpdateTime').textContent =
-        now.getFullYear() + '/' + pad(now.getMonth() + 1) + '/' + pad(now.getDate()) + ' ' +
-        pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    el.textContent = '更新 ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
 }
 
 
@@ -647,7 +648,6 @@ async function initializeStocks() {
         updateStockPrices();
         schedulePoll();
         updateLastUpdateTime();
-        setInterval(updateLastUpdateTime, 1000);
     } catch (error) {
         console.error('初始化股票數據時發生錯誤:', error);
         stocks = initStockData();

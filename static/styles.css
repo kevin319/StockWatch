@@ -142,6 +142,14 @@ img { display: block; max-width: 100%; }
   color: #fff;
 }
 
+/* 深色模式下陰影隱形，改用細邊框與微提亮的底色拉開與背景的層次 */
+[data-theme="dark"] .hero-card {
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(130% 90% at 85% -10%, rgba(94,124,255,0.16), transparent 60%),
+    linear-gradient(165deg, #262833, #16171c);
+}
+
 .hero-head {
   display: flex;
   justify-content: space-between;
