@@ -11,11 +11,15 @@ class Settings(BaseSettings):
     if not GOOGLE_CLIENT_ID:
         raise ValueError("GOOGLE_CLIENT_ID 未在 .env 檔案中設定")
 
-    # Gemini API 配置
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY 未在 .env 檔案中設定")
-    GEMINI_API_URL: str = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent")
+    # DeepSeek API 配置
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY")
+    if not DEEPSEEK_API_KEY:
+        raise ValueError("DEEPSEEK_API_KEY 未在 .env 檔案中設定")
+    DEEPSEEK_API_URL: str = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+    # Finnhub API 設定（選用，缺少時會 fallback 到 yfinance）
+    FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
 
     # JWT 設定
     JWT_SECRET: str = os.getenv("JWT_SECRET", "your-secret-key")

@@ -42,6 +42,9 @@ Thumbs.db
 # 專案特定忽略
 *.log
 
+# Playwright MCP 暫存
+.playwright-mcp/
+
 # Node.js 相關
 node_modules/
 npm-debug.log*

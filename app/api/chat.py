@@ -20,29 +20,30 @@ async def chat(request: ChatRequest):
     try:
         headers = {
             "Content-Type": "application/json",
-            "x-goog-api-key": settings.GEMINI_API_KEY
+            "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"
         }
-        
-        # 組合系統提示和用戶訊息
-        combined_message = f"{SYSTEM_PROMPT}\n\n使用者問題：{request.message}"
-        
+
         data = {
-            "contents": [{
-                "parts": [{
-                    "text": combined_message
-                }]
-            }]
+            "model": settings.DEEPSEEK_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": request.message}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 256
         }
-        
+
+        url = settings.DEEPSEEK_API_URL.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url += "/chat/completions"
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(settings.GEMINI_API_URL, headers=headers, json=data) as response:
-                result = await response.json()
-                
-                if 'candidates' in result and len(result['candidates']) > 0:
-                    content = result['candidates'][0]['content']
-                    if 'parts' in content and len(content['parts']) > 0:
-                        return {"response": content['parts'][0]['text']}
-                
+            async with session.post(url, headers=headers, json=data) as response:
+                result = await response.json(content_type=None)
+
+                if "choices" in result and len(result["choices"]) > 0:
+                    return {"response": result["choices"][0]["message"]["content"]}
+
                 return {"response": "抱歉，我無法處理這個請求。"}
     except Exception as e:
         return {"response": f"發生錯誤: {str(e)}"}
