@@ -1,0 +1,9 @@
+# metric: 加權未解決設計問題數 (P0×3,P1×2,P2×1) | direction: lower_is_better | stop: 無 P0/P1 殘留(Jobs 滿意)
+iteration	timestamp	commit	metric	delta	guard	status	description
+0	2026-06-29T10:12	066adbf	13	0.0	pass	baseline	初始: 1×P0(hero是裝飾非資訊) 3×P1(秒數跳動/caption冗餘/時鐘對比低) 4×P2(盤前誤標/全畫面過度用色/無趨勢/載入文字)
+1	2026-06-29T10:30	da5db28	5	-8.0	pass	keep?	Hero重塑: 砍彩虹+三次標題, 深色市場儀表板(4格grid), 市場時鐘成主角, 加開盤數摘要. 解 P0+2×P1+1×P2
+2	2026-06-29T10:35	7d946ee	3	-2.0	pass	keep?	冷靜化: 導覽列秒數跳動→更新HH:MM(僅實際刷新時更新); 深色hero加細邊框+微提亮拉開層次. 解最後1×P1
+3	2026-06-29T10:41	992a7e3	1	-2.0	pass	keep?	Sparkline: 新增 /sparkline 端點(yfinance近月日線,快取30分)+每列迷你走勢圖(紅漲綠跌); 順手修demo假盤前. 解 P2#1+#2; 修走勢圖各列水平對齊(價格欄固定108px)
+4	2026-06-29T11:55	b61da7e	1	0.0	pass	keep	交易中每10秒自動更新: 後端REGULAR快取15→8s+前端no-store; 價格變動微閃爍(紅漲綠跌). (功能性需求,非原設計指標)
+5	2026-06-29T12:00	9021761	0	-1.0	pass	keep	載入骨架shimmer+首次淡入+移除「載入中」. 解最後P2,設計指標歸零
+6	2026-06-29T12:05	7c418b1	0	0.0	pass	keep	功能正確性: 幣別標示(NT$/HK$/¥/$)+美股冬令(zoneinfo). 修2個真bug,holiday(#3)未做
