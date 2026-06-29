@@ -67,6 +67,7 @@ let touchStartY = null;
 let currentTouchItem = null;
 let sparkData = {}; // ticker -> 近期收盤序列
 let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向（供微閃爍）
+let firstStockRender = true; // 首次渲染真實資料時做淡入
 
 function initStockData() {
     stocks = [
@@ -233,6 +234,24 @@ function sparklineSvg(points) {
     </svg>`;
 }
 
+// 載入骨架（資料抵達前的優雅占位）
+function renderSkeleton(n = 4) {
+    const stockList = document.getElementById('stockList');
+    if (!stockList) return;
+    let html = '';
+    for (let i = 0; i < n; i++) {
+        html += `<div class="skeleton-row">
+            <div class="sk sk-tile"></div>
+            <div><div class="sk sk-line w1"></div><div class="sk sk-line w2"></div></div>
+            <div class="sk sk-spark"></div>
+            <div class="sk sk-price"></div>
+        </div>`;
+    }
+    stockList.innerHTML = html;
+    const card = document.getElementById('stockListCard');
+    if (card) card.style.display = '';
+}
+
 function renderStocks() {
     const stockList = document.getElementById('stockList');
     stockList.innerHTML = '';
@@ -249,7 +268,7 @@ function renderStocks() {
         return;
     }
 
-    stocks.forEach((stock) => {
+    stocks.forEach((stock, index) => {
         const up = stock.price_change >= 0;
         const changeClass = up ? 'price-up' : 'price-down';
         const arrow = up ? '+' : '';
@@ -262,7 +281,8 @@ function renderStocks() {
 
         const row = document.createElement('div');
         const flashDir = priceFlash[stock.ticker];
-        row.className = 'v2-row' + (flashDir ? ' flash-' + flashDir : '');
+        row.className = 'v2-row' + (flashDir ? ' flash-' + flashDir : '') + (firstStockRender ? ' row-enter' : '');
+        if (firstStockRender) row.style.animationDelay = (index * 40) + 'ms';
         row.innerHTML = `
             ${tileHtml(stock)}
             <div class="row-info">
@@ -284,6 +304,7 @@ function renderStocks() {
         stockList.appendChild(row);
     });
 
+    firstStockRender = false;
     priceFlash = {}; // 閃爍只觸發一次
     updateHeroCaption();
     updateLastUpdateTime();
@@ -686,6 +707,7 @@ function updateLastUpdateTime() {
 /* ═══════ INIT ═══════ */
 
 async function initializeStocks() {
+    renderSkeleton(); // 資料抵達前先顯示骨架
     try {
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
