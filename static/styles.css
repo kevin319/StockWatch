@@ -229,8 +229,9 @@ img { display: block; max-width: 100%; }
 
 .v2-row {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
-  gap: 12px;
+  /* 價格欄固定寬度，確保走勢圖在各列水平對齊（不受盤前/盤後資訊影響） */
+  grid-template-columns: 40px minmax(0, 1fr) 54px 108px;
+  gap: 10px;
   align-items: center;
   padding: 12px 20px;
   transition: transform 120ms;
@@ -271,6 +272,14 @@ img { display: block; max-width: 100%; }
 .row-info .ty-subtitle {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+.row-spark {
+  width: 54px; height: 28px;
+  flex-shrink: 0;
+  display: flex; align-items: center;
+}
+
+.spark-svg { width: 54px; height: 28px; display: block; }
 
 .row-price {
   text-align: right;
