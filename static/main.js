@@ -116,6 +116,15 @@ function getMarketDotClass(state) {
     return 'market-dot-close';
 }
 
+// 依代號後綴決定幣別符號（避免台/港/陸股都標成美金 $）
+function currencySymbol(ticker) {
+    const t = (ticker || '').toUpperCase();
+    if (t.endsWith('.TW') || t.endsWith('.TWO')) return 'NT$';
+    if (t.endsWith('.HK')) return 'HK$';
+    if (t.endsWith('.SS') || t.endsWith('.SZ')) return '¥';
+    return '$'; // 美股
+}
+
 
 /* ═══════ MARKET CLOCK ═══════ */
 
@@ -278,6 +287,7 @@ function renderStocks() {
         const extArrow = extUp ? '+' : '';
         const extLabel = stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後';
         const dotClass = getMarketDotClass(stock.market_state);
+        const cur = currencySymbol(stock.ticker);
 
         const row = document.createElement('div');
         const flashDir = priceFlash[stock.ticker];
@@ -293,11 +303,11 @@ function renderStocks() {
             </div>
             <div class="row-spark">${sparklineSvg(sparkData[stock.ticker])}</div>
             <div class="row-price">
-                <span class="price-main">$${stock.price.toFixed(2)}</span>
+                <span class="price-main">${cur}${stock.price.toFixed(2)}</span>
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
                 ${hasExtended ? `
                 <span class="price-extended">
-                    ${extLabel} $${stock.extended_price.toFixed(2)}
+                    ${extLabel} ${cur}${stock.extended_price.toFixed(2)}
                     <span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>
                 </span>` : ''}
             </div>`;
