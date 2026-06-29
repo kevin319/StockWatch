@@ -80,8 +80,8 @@ img { display: block; max-width: 100%; }
 .ty-caption   { font: 400 12px/1.30 var(--font); letter-spacing: -0.08px; color: var(--text-tertiary); }
 .ty-eyebrow   { font: 600 11px/1    var(--font); letter-spacing: 1.5px;   text-transform: uppercase; }
 
-.price-up   { color: var(--positive); }
-.price-down { color: var(--negative); }
+.price-up   { color: var(--negative); } /* 紅漲（東方習慣） */
+.price-down { color: var(--positive); } /* 綠跌（東方習慣） */
 
 
 /* ═══════ NAV TOP ═══════ */
