@@ -19,6 +19,16 @@ app.add_middleware(
 # 設定靜態文件
 app.mount("/static", StaticFiles(directory="static", check_dir=False), name="static")
 
+
+# 靜態檔與頁面加 no-cache：瀏覽器每次以 etag 向伺服器驗證，避免快取到舊版前端
+@app.middleware("http")
+async def add_no_cache_header(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static") or request.url.path in ("/", "/home"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # 設定安全性
 security = HTTPBearer()
 
