@@ -74,7 +74,7 @@ async def get_stock_price(ticker: str):
             time_diff = current_time - cache_data['timestamp']
             last_state = cache_data['data'].get('market_state', '')
             if last_state == 'REGULAR':
-                cache_ttl = timedelta(seconds=15)
+                cache_ttl = timedelta(seconds=8)  # <10s，讓前端 10 秒輪詢每次都拿到新價
             elif last_state in ('PRE', 'POST'):
                 cache_ttl = timedelta(seconds=60)
             else:

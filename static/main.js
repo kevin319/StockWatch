@@ -66,6 +66,7 @@ let draggedItemIndex = null;
 let touchStartY = null;
 let currentTouchItem = null;
 let sparkData = {}; // ticker -> 近期收盤序列
+let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向（供微閃爍）
 
 function initStockData() {
     stocks = [
@@ -260,7 +261,8 @@ function renderStocks() {
         const dotClass = getMarketDotClass(stock.market_state);
 
         const row = document.createElement('div');
-        row.className = 'v2-row';
+        const flashDir = priceFlash[stock.ticker];
+        row.className = 'v2-row' + (flashDir ? ' flash-' + flashDir : '');
         row.innerHTML = `
             ${tileHtml(stock)}
             <div class="row-info">
@@ -282,6 +284,7 @@ function renderStocks() {
         stockList.appendChild(row);
     });
 
+    priceFlash = {}; // 閃爍只觸發一次
     updateHeroCaption();
     updateLastUpdateTime();
 }
@@ -630,9 +633,12 @@ async function updateStockPrices() {
     if (!stocks || !stocks.length) return;
 
     try {
+        const prev = {};
+        stocks.forEach(s => { prev[s.ticker] = s.price; });
+
         const updated = await Promise.all(stocks.map(async (stock) => {
             try {
-                const response = await fetch('/stockprice/' + stock.ticker);
+                const response = await fetch('/stockprice/' + stock.ticker, { cache: 'no-store' });
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
                 if (data.error) return stock;
@@ -646,6 +652,15 @@ async function updateStockPrices() {
                 return stock;
             }
         }));
+
+        // 標記價格有變動的股票，讓 renderStocks 做一次微閃爍
+        priceFlash = {};
+        updated.forEach(s => {
+            const before = prev[s.ticker];
+            if (before != null && typeof s.price === 'number' && s.price !== before) {
+                priceFlash[s.ticker] = s.price > before ? 'up' : 'down';
+            }
+        });
 
         stocks = updated;
         renderStocks();
