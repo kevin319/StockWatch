@@ -1,197 +1,326 @@
-// Tailwind 配置
-tailwind.config = {
-    theme: {
-        extend: {
-            colors: {
-                primary: '#60A5FA',
-                secondary: '#1E293B'
-            },
-            borderRadius: {
-                'none': '0px',
-                'sm': '4px',
-                DEFAULT: '8px',
-                'md': '12px',
-                'lg': '16px',
-                'xl': '20px',
-                '2xl': '24px',
-                '3xl': '32px',
-                'full': '9999px',
-                'button': '8px'
-            }
-        }
+/* ═══════ THEME ═══════ */
+
+function loadTheme() {
+    var saved = localStorage.getItem('sw-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+    updateThemeToggle(saved);
+}
+
+function setTheme(theme) {
+    localStorage.setItem('sw-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    updateThemeToggle(theme);
+}
+
+function updateThemeToggle(theme) {
+    var toggle = document.getElementById('themeToggle');
+    if (!toggle) return;
+    var buttons = toggle.querySelectorAll('.seg-btn');
+    buttons.forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.theme === theme);
+    });
+    var thumb = toggle.querySelector('.seg-thumb');
+    if (thumb) {
+        thumb.style.transform = theme === 'dark' ? 'translateX(100%)' : 'translateX(0)';
     }
-};
+}
 
-// 股票數據
+
+/* ═══════ TILE GRADIENTS ═══════ */
+
+const TILE_GRADIENTS = [
+    'linear-gradient(160deg, #4fa3ff, #0066ff)',
+    'linear-gradient(160deg, #ffb84d, #ff8800)',
+    'linear-gradient(160deg, #b68cff, #7a4bff)',
+    'linear-gradient(160deg, #ff80b3, #ff3380)',
+    'linear-gradient(160deg, #5de08e, #1fb053)',
+    'linear-gradient(160deg, #ff7a7a, #e03030)',
+    'linear-gradient(160deg, #5cd1e0, #00a8c0)',
+    'linear-gradient(160deg, #8a8aff, #5050ff)',
+    'linear-gradient(160deg, #ffd97a, #e0a030)',
+    'linear-gradient(160deg, #b5b5bc, #7a7a82)',
+];
+
+function getTileGradient(ticker) {
+    let hash = 0;
+    for (let i = 0; i < ticker.length; i++) {
+        hash = ticker.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return TILE_GRADIENTS[Math.abs(hash) % TILE_GRADIENTS.length];
+}
+
+const SVG_DRAG = '<svg width="14" height="18" viewBox="0 0 14 18" fill="none"><circle cx="4" cy="3" r="1.2" fill="currentColor"/><circle cx="10" cy="3" r="1.2" fill="currentColor"/><circle cx="4" cy="9" r="1.2" fill="currentColor"/><circle cx="10" cy="9" r="1.2" fill="currentColor"/><circle cx="4" cy="15" r="1.2" fill="currentColor"/><circle cx="10" cy="15" r="1.2" fill="currentColor"/></svg>';
+
+const SVG_DELETE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
+
+const SVG_ADD = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+const SVG_EMPTY = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M7 17l4-4 3 2 3-3"/></svg>';
+
+
+/* ═══════ STATE ═══════ */
+
 let stocks = [];
+let draggedItem = null;
+let draggedItemIndex = null;
+let touchStartY = null;
+let currentTouchItem = null;
 
-// 初始化股票數據
 function initStockData() {
-    // 測試數據，格式與 API 返回格式一致
     stocks = [
-        {
-            ticker: 'CWEB',
-            company_name: 'Direxion Daily CSI China Internet Index Bull 2X Shares',
-            price: 43.63,
-            prev_close: 44.50,
-            price_change: -0.87,
-            price_change_percent: -1.96,
-            market_state: 'REGULAR',
-            extended_price: 40.90,
-            extended_type: 'PRE_MARKET',
-            extended_change: -2.73,
-            extended_change_percent: -6.25
-        },
-        {
-            ticker: 'KTEC',
-            company_name: 'Korea Electric Terminal Co., Ltd.',
-            price: 17.40,
-            prev_close: 17.80,
-            price_change: -0.40,
-            price_change_percent: -2.25,
-            market_state: 'REGULAR',
-            extended_price: 17.57,
-            extended_type: 'PRE_MARKET',
-            extended_change: 0.17,
-            extended_change_percent: 0.98
-        },
-        {
-            ticker: 'PLTR',
-            company_name: 'Palantir Technologies Inc.',
-            price: 24.77,
-            prev_close: 25.20,
-            price_change: -0.43,
-            price_change_percent: -1.71,
-            market_state: 'REGULAR',
-            extended_price: 0,
-            extended_type: '',
-            extended_change: 0,
-            extended_change_percent: 0
-        },
-        {
-            ticker: '2330.TW',
-            company_name: '台灣積體電路製造股份有限公司',
-            price: 84.77,
-            prev_close: 85.20,
-            price_change: -0.43,
-            price_change_percent: -0.51,
-            market_state: 'REGULAR',
-            extended_price: 83.74,
-            extended_type: 'PRE_MARKET',
-            extended_change: -1.03,
-            extended_change_percent: -1.21
-        }
+        { ticker: 'CWEB', company_name: 'Direxion Daily CSI China Internet Bull 2X', price: 43.63, prev_close: 44.50, price_change: -0.87, price_change_percent: -1.96, market_state: 'REGULAR', extended_price: 40.90, extended_type: 'PRE_MARKET', extended_change: -2.73, extended_change_percent: -6.25 },
+        { ticker: 'PLTR', company_name: 'Palantir Technologies Inc.', price: 24.77, prev_close: 25.20, price_change: -0.43, price_change_percent: -1.71, market_state: 'REGULAR', extended_price: 0, extended_type: '', extended_change: 0, extended_change_percent: 0 },
+        { ticker: '2330.TW', company_name: '台灣積體電路製造股份有限公司', price: 84.77, prev_close: 85.20, price_change: -0.43, price_change_percent: -0.51, market_state: 'REGULAR', extended_price: 83.74, extended_type: 'PRE_MARKET', extended_change: -1.03, extended_change_percent: -1.21 },
     ];
     return stocks;
 }
 
-// UI 控制功能
-function toggleMessageModal() {
-    const modal = document.getElementById('messageModal');
-    modal.classList.toggle('hidden');
-}
+
+/* ═══════ UI TOGGLES ═══════ */
 
 function toggleChatWindow() {
-    const chatWindow = document.getElementById('chatWindow');
-    const mainContent = document.querySelector('main');
-    chatWindow.classList.toggle('hidden');
-    mainContent.classList.toggle('mt-[340px]');
-    mainContent.classList.toggle('mt-14');
+    const el = document.getElementById('chatWindow');
+    el.classList.toggle('hidden');
 }
 
 function toggleSettingsPage() {
-    const settingsPage = document.getElementById('settingsPage');
-    if (!settingsPage) return;
-    
-    settingsPage.classList.toggle('hidden');
-    
-    // 如果設置頁面變為可見，重新渲染自選股列表和所有股票列表
-    if (!settingsPage.classList.contains('hidden')) {
+    const el = document.getElementById('settingsPage');
+    if (!el) return;
+    el.classList.toggle('hidden');
+    if (!el.classList.contains('hidden')) {
+        updateThemeToggle(localStorage.getItem('sw-theme') || 'light');
         renderSettingsStockList();
-        renderStocks();
     }
 }
 
-// 渲染設置頁面的股票列表
-function renderSettingsStockList() {
-    const stockListContainer = document.getElementById('settingsStockList');
-    if (!stockListContainer) return;
 
-    stockListContainer.innerHTML = '';
+/* ═══════ MARKET STATE ═══════ */
+
+function getMarketStateText(state) {
+    switch (state) {
+        case 'PRE':         return '盤前';
+        case 'REGULAR':     return '交易中';
+        case 'POST':
+        case 'POSTPOST':
+        case 'CLOSED':      return '已收盤';
+        default:            return state || '';
+    }
+}
+
+function getMarketDotClass(state) {
+    if (state === 'REGULAR') return 'market-dot-live';
+    if (state === 'PRE') return 'market-dot-pre';
+    return 'market-dot-close';
+}
+
+
+/* ═══════ MARKET CLOCK ═══════ */
+
+// 各市場正規盤時段（當地分鐘數，週一至五；午休算休市）
+const MARKETS = [
+    { name: '美股', tz: 'America/New_York', sessions: [[570, 960]] },             // 09:30-16:00
+    { name: '台股', tz: 'Asia/Taipei',      sessions: [[540, 810]] },             // 09:00-13:30
+    { name: '港股', tz: 'Asia/Hong_Kong',   sessions: [[570, 720], [780, 960]] }, // 09:30-12:00, 13:00-16:00
+    { name: '陸股', tz: 'Asia/Shanghai',    sessions: [[570, 690], [780, 900]] }, // 09:30-11:30, 13:00-15:00
+];
+
+// 取得某時區「現在」的星期(0=日..6=六)與當日分鐘數
+function getZonedNow(tz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(new Date());
+    const map = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+    const wdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    let hour = parseInt(map.hour, 10);
+    if (hour === 24) hour = 0; // 某些引擎午夜輸出 24
+    return { weekday: wdays[map.weekday], minutes: hour * 60 + parseInt(map.minute, 10) };
+}
+
+function isTradingDay(weekday) { return weekday >= 1 && weekday <= 5; }
+
+// 回傳 { open } 或 { open:false, countdownMin }（到下次開盤的分鐘數，以當地牆鐘計算）
+function getMarketClockInfo(market) {
+    const { weekday, minutes } = getZonedNow(market.tz);
+
+    if (isTradingDay(weekday)) {
+        for (const [open, close] of market.sessions) {
+            if (minutes >= open && minutes < close) return { open: true };
+        }
+    }
+
+    for (let offset = 0; offset < 8; offset++) {
+        const wd = (weekday + offset) % 7;
+        if (!isTradingDay(wd)) continue;
+        for (const [open] of market.sessions) {
+            const deltaMin = offset * 1440 + open - minutes;
+            if (deltaMin > 0) return { open: false, countdownMin: deltaMin };
+        }
+    }
+    return { open: false, countdownMin: null };
+}
+
+function formatCountdown(min) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+function renderMarketClock() {
+    const el = document.getElementById('marketClock');
+    if (!el) return;
+    const pad = n => String(n).padStart(2, '0');
+
+    el.innerHTML = MARKETS.map(m => {
+        const info = getMarketClockInfo(m);
+        let status;
+        if (info.open) {
+            status = '<span class="mc-status mc-open"><span class="mc-dot"></span>交易中</span>';
+        } else if (info.countdownMin != null) {
+            // 下次開盤的使用者當地時間 ≈ 現在 + 倒數分鐘（與倒數採同一近似）
+            const openLocal = new Date(Date.now() + info.countdownMin * 60000);
+            const openStr = pad(openLocal.getHours()) + ':' + pad(openLocal.getMinutes());
+            status = `<span class="mc-status"><span class="mc-time">${openStr}開</span>倒數 ${formatCountdown(info.countdownMin)}</span>`;
+        } else {
+            status = '<span class="mc-status">休市</span>';
+        }
+        return `<div class="mc-row"><span class="mc-name">${m.name}</span>${status}</div>`;
+    }).join('');
+}
+
+
+/* ═══════ RENDER STOCKS ═══════ */
+
+function tileHtml(stock) {
+    const grad = getTileGradient(stock.ticker);
+    const label = (stock.company_name || stock.ticker || '?').trim().charAt(0).toUpperCase();
+    if (stock.logo_url) {
+        return `<div class="v2-tile">
+            <img src="${stock.logo_url}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <span class="tile-initial" style="display:none;background:${grad}">${label}</span>
+        </div>`;
+    }
+    return `<div class="v2-tile"><span class="tile-initial" style="background:${grad}">${label}</span></div>`;
+}
+
+function renderStocks() {
+    const stockList = document.getElementById('stockList');
+    stockList.innerHTML = '';
+
+    if (!stocks.length) {
+        stockList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">${SVG_EMPTY}</div>
+                <div class="empty-state-title">尚未追蹤任何股票</div>
+                <div class="empty-state-desc">使用下方搜尋列新增股票到自選清單</div>
+            </div>`;
+        document.getElementById('stockListCard').style.display = '';
+        updateHeroCaption();
+        return;
+    }
+
+    stocks.forEach((stock) => {
+        const up = stock.price_change >= 0;
+        const changeClass = up ? 'price-up' : 'price-down';
+        const arrow = up ? '+' : '';
+        const hasExtended = stock.extended_price && stock.extended_price > 0;
+        const extUp = stock.extended_change >= 0;
+        const extClass = extUp ? 'price-up' : 'price-down';
+        const extArrow = extUp ? '+' : '';
+        const extLabel = stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後';
+        const dotClass = getMarketDotClass(stock.market_state);
+
+        const row = document.createElement('div');
+        row.className = 'v2-row';
+        row.innerHTML = `
+            ${tileHtml(stock)}
+            <div class="row-info">
+                <div class="ty-row">
+                    <span class="market-dot ${dotClass}"></span>${stock.ticker}
+                </div>
+                <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
+            </div>
+            <div class="row-price">
+                <span class="price-main">$${stock.price.toFixed(2)}</span>
+                <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
+                ${hasExtended ? `
+                <span class="price-extended">
+                    ${extLabel} $${stock.extended_price.toFixed(2)}
+                    <span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>
+                </span>` : ''}
+            </div>`;
+        stockList.appendChild(row);
+    });
+
+    updateHeroCaption();
+    updateLastUpdateTime();
+}
+
+function updateHeroCaption() {
+    const el = document.getElementById('heroCaption');
+    if (!el) return;
+    if (!stocks.length) {
+        el.textContent = '搜尋並新增股票開始追蹤';
+        return;
+    }
+    const marketState = stocks[0] ? getMarketStateText(stocks[0].market_state) : '';
+    el.textContent = stocks.length + ' 檔股票' + (marketState ? ' · ' + marketState : '');
+}
+
+
+/* ═══════ RENDER SETTINGS STOCK LIST ═══════ */
+
+function renderSettingsStockList() {
+    const container = document.getElementById('settingsStockList');
+    if (!container) return;
+    container.innerHTML = '';
 
     stocks.forEach((stock, index) => {
-        const stockItem = document.createElement('div');
-        stockItem.className = 'stock-item bg-secondary rounded-lg p-4 mb-2';
-        stockItem.dataset.index = index;
+        const row = document.createElement('div');
+        row.className = 'settings-row';
+        row.dataset.index = index;
 
-        stockItem.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="flex-shrink-0">
-                    <div class="w-12 h-12 rounded-full bg-blue-600/10 flex items-center justify-center overflow-hidden">
-                        ${stock.logo_url ? 
-                            `<img src="${stock.logo_url}" alt="${stock.ticker}" class="w-8 h-8 object-contain">` :
-                            `<span class="text-blue-600 font-medium text-xl">${stock.ticker[0]}</span>`
-                        }
-                    </div>
-                </div>
-                <div class="flex-1 space-y-1">
-                    <div class="font-medium">${stock.ticker}</div>
-                    <div class="text-sm text-gray-400">${stock.company_name}</div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <div class="drag-handle cursor-move w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-300 hover:bg-gray-700/50 rounded-lg">
-                        <i class="ri-menu-line"></i>
-                    </div>
-                    <button type="button" 
-                            class="delete-stock-btn w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-lg"
-                            data-ticker="${stock.ticker}">
-                        <i class="ri-delete-bin-line"></i>
-                    </button>
-                </div>
+        row.innerHTML = `
+            ${tileHtml(stock)}
+            <div class="row-info">
+                <div class="ty-row">${stock.ticker}</div>
+                <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
             </div>
-        `;
+            <div class="drag-handle">${SVG_DRAG}</div>
+            <button type="button" class="delete-btn" data-ticker="${stock.ticker}">
+                ${SVG_DELETE}
+            </button>`;
 
-        // 為刪除按鈕添加點擊事件
-        const deleteBtn = stockItem.querySelector('.delete-stock-btn');
-        deleteBtn.addEventListener('click', (e) => {
+        row.querySelector('.delete-btn').addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const ticker = e.currentTarget.dataset.ticker;
-            removeStock(ticker);
+            removeStock(e.currentTarget.dataset.ticker);
         });
 
-        // 為拖拉把手添加觸控事件
-        const dragHandle = stockItem.querySelector('.drag-handle');
-        dragHandle.addEventListener('touchstart', handleTouchStart, { passive: false });
-        dragHandle.addEventListener('touchmove', handleTouchMove, { passive: false });
-        dragHandle.addEventListener('touchend', handleTouchEnd);
+        const handle = row.querySelector('.drag-handle');
+        handle.addEventListener('touchstart', handleTouchStart, { passive: false });
+        handle.addEventListener('touchmove', handleTouchMove, { passive: false });
+        handle.addEventListener('touchend', handleTouchEnd);
+        handle.addEventListener('mousedown', handleMouseDown);
 
-        stockListContainer.appendChild(stockItem);
+        container.appendChild(row);
     });
 }
 
-// 移除股票
+
+/* ═══════ STOCK CRUD ═══════ */
+
 async function removeStock(ticker) {
     try {
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) {
-            throw new Error('找不到使用者資訊');
-        }
+        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
-        // 呼叫後端 API 移除股票
-        const response = await fetch(`/watchlist/${userInfo.email}/${ticker}`, {
-            method: 'DELETE'
-        });
+        const response = await fetch('/watchlist/' + userInfo.email + '/' + ticker, { method: 'DELETE' });
+        if (!response.ok) throw new Error('移除股票失敗');
 
-        if (!response.ok) {
-            throw new Error('移除股票失敗');
-        }
-
-        // 從本地數據中移除
-        const index = stocks.findIndex(s => s.ticker === ticker);
-        if (index >= 0) {
-            stocks.splice(index, 1);
-            // 更新介面
+        const idx = stocks.findIndex(s => s.ticker === ticker);
+        if (idx >= 0) {
+            stocks.splice(idx, 1);
             renderSettingsStockList();
             renderStocks();
         }
@@ -200,464 +329,316 @@ async function removeStock(ticker) {
     }
 }
 
-// 新增股票到追蹤清單
 async function addToWatchlist(ticker) {
     try {
-        // 檢查是否已在股票清單中
-        if (stocks.some(stock => stock.ticker === ticker)) {
+        if (stocks.some(s => s.ticker === ticker)) {
             throw new Error('此股票已在清單中');
         }
 
-        // 獲取使用者資訊
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) {
-            throw new Error('找不到使用者資訊');
-        }
+        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
-        // 呼叫後端 API 新增股票
-        const response = await fetch(`/watchlist/add?ticker=${ticker}&user_email=${userInfo.email}`, {
-            method: 'POST'
-        });
+        const response = await fetch('/watchlist/add?ticker=' + ticker + '&user_email=' + userInfo.email, { method: 'POST' });
+        if (!response.ok) throw new Error('新增股票失敗');
 
-        if (!response.ok) {
-            throw new Error('新增股票失敗');
-        }
-
-        // 取得股票資訊
-        const stockResponse = await fetch(`/stockprice/${ticker}`);
-        if (!stockResponse.ok) {
-            throw new Error('取得股票資訊失敗');
-        }
+        const stockResponse = await fetch('/stockprice/' + ticker);
+        if (!stockResponse.ok) throw new Error('取得股票資訊失敗');
         const stockData = await stockResponse.json();
 
-        // 新增到本地數據
         stocks.push(stockData);
-
-        // 更新介面
         renderSettingsStockList();
         renderStocks();
 
-        // 關閉搜尋結果
-        const searchResults = document.getElementById('searchResults');
-        const searchInput = document.getElementById('searchInput');
-        searchResults.classList.add('hidden');
-        searchInput.value = '';
-
+        document.getElementById('searchResults').classList.add('hidden');
+        document.getElementById('searchInput').value = '';
     } catch (error) {
         console.error('新增股票時發生錯誤:', error);
-        const searchInput = document.getElementById('searchInput');
-        const searchResults = document.getElementById('searchResults');
-        
-        // 顯示錯誤提示
         showToast(error.message);
-        
-        // 清空搜尋框並隱藏結果
-        searchInput.value = '';
-        searchResults.classList.add('hidden');
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResults').classList.add('hidden');
     }
 }
 
-// 觸控事件處理函數
+
+/* ═══════ TOUCH DRAG ═══════ */
+
 function handleTouchStart(e) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const touch = e.touches[0];
     const handle = e.target.closest('.drag-handle');
     if (!handle) return;
-    
-    const item = handle.closest('.stock-item');
+
+    const item = handle.closest('.settings-row');
     if (!item) return;
-    
+
     touchStartY = touch.clientY;
     currentTouchItem = item;
     draggedItemIndex = parseInt(item.dataset.index);
-    
-    // 記錄初始位置
+
     item.style.position = 'relative';
     item.style.zIndex = '1000';
-    item.style.backgroundColor = '#1E293B';
     item.classList.add('touch-dragging');
-    
-    // 重置其他項目的狀態
-    const items = document.querySelectorAll('.stock-item');
+
+    const items = document.querySelectorAll('.settings-row');
     items.forEach(i => {
-        if (i !== item) {
-            i.style.transition = 'transform 0.3s ease';
-        }
+        if (i !== item) i.style.transition = 'transform 0.3s ease';
     });
 }
 
 function handleTouchMove(e) {
-    if (!currentTouchItem || !touchStartY) return;
-    
+    if (!currentTouchItem || touchStartY === null) return;
     e.preventDefault();
     e.stopPropagation();
-    
+
     const touch = e.touches[0];
     const moveY = touch.clientY - touchStartY;
-    
-    // 移動當前項目
-    currentTouchItem.style.transform = `translateY(${moveY}px)`;
-    
-    // 獲取所有項目
+    currentTouchItem.style.transform = 'translateY(' + moveY + 'px)';
+
     const container = document.getElementById('settingsStockList');
-    const items = Array.from(container.querySelectorAll('.stock-item'));
+    const items = Array.from(container.querySelectorAll('.settings-row'));
     const itemHeight = currentTouchItem.offsetHeight;
     const currentIndex = items.indexOf(currentTouchItem);
-    
-    // 計算目標位置
     const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
     const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
-    
-    // 移動其他項目
+
     items.forEach((item, index) => {
         if (item === currentTouchItem) return;
-        
         if (boundedIndex > currentIndex && index > currentIndex && index <= boundedIndex) {
-            item.style.transform = `translateY(${-itemHeight}px)`;
+            item.style.transform = 'translateY(' + (-itemHeight) + 'px)';
         } else if (boundedIndex < currentIndex && index < currentIndex && index >= boundedIndex) {
-            item.style.transform = `translateY(${itemHeight}px)`;
+            item.style.transform = 'translateY(' + itemHeight + 'px)';
         } else {
             item.style.transform = '';
         }
     });
 }
 
-function handleTouchEnd(e) {
+function handleTouchEnd() {
     if (!currentTouchItem) return;
-    
+
     const container = document.getElementById('settingsStockList');
-    const items = Array.from(container.querySelectorAll('.stock-item'));
+    const items = Array.from(container.querySelectorAll('.settings-row'));
     const currentIndex = items.indexOf(currentTouchItem);
-    const moveY = parseFloat(currentTouchItem.style.transform.replace('translateY(', '').replace('px)', '') || 0);
+    const raw = currentTouchItem.style.transform;
+    const moveY = parseFloat(raw.replace('translateY(', '').replace('px)', '') || 0);
     const itemHeight = currentTouchItem.offsetHeight;
-    
-    // 計算目標位置
     const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
     const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
-    
+
     if (boundedIndex !== currentIndex) {
-        // 更新數據
         const itemToMove = stocks[currentIndex];
         stocks.splice(currentIndex, 1);
         stocks.splice(boundedIndex, 0, itemToMove);
-        
-        // 更新介面和後端
         renderSettingsStockList();
         renderStocks();
         updateStockOrder();
     } else {
-        // 重置所有項目的位置
-        items.forEach(item => {
-            item.style.transform = '';
-            item.style.transition = '';
-        });
+        items.forEach(item => { item.style.transform = ''; item.style.transition = ''; });
     }
-    
-    // 清理狀態
+
     currentTouchItem.style.position = '';
     currentTouchItem.style.zIndex = '';
     currentTouchItem.style.transform = '';
-    currentTouchItem.style.backgroundColor = '';
     currentTouchItem.classList.remove('touch-dragging');
-    
     currentTouchItem = null;
     touchStartY = null;
     draggedItemIndex = null;
 }
 
-// 拖拉相關變數
-let draggedItem = null;
-let draggedItemIndex = null;
-let touchStartY = null;
-let currentTouchItem = null;
 
-// 拖拉事件處理函數
-function handleDragStart(e) {
-    draggedItem = e.target;
-    draggedItemIndex = parseInt(e.target.dataset.index);
-    e.target.classList.add('opacity-50');
-}
+/* ═══════ MOUSE DRAG ═══════ */
 
-function handleDragOver(e) {
+function handleMouseDown(e) {
     e.preventDefault();
-}
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
 
-function handleDragEnter(e) {
-    e.preventDefault();
-    const item = e.target.closest('[data-index]');
-    if (item && item !== draggedItem) {
-        item.classList.add('bg-blue-500/10');
+    const item = handle.closest('.settings-row');
+    if (!item) return;
+
+    const startY = e.clientY;
+    currentTouchItem = item;
+    draggedItemIndex = parseInt(item.dataset.index);
+
+    item.style.position = 'relative';
+    item.style.zIndex = '1000';
+    item.classList.add('touch-dragging');
+
+    const container = document.getElementById('settingsStockList');
+    const items = Array.from(container.querySelectorAll('.settings-row'));
+    items.forEach(i => {
+        if (i !== item) i.style.transition = 'transform 0.3s ease';
+    });
+
+    function onMouseMove(ev) {
+        if (!currentTouchItem) return;
+        const moveY = ev.clientY - startY;
+        currentTouchItem.style.transform = 'translateY(' + moveY + 'px)';
+
+        const itemHeight = currentTouchItem.offsetHeight;
+        const currentIndex = items.indexOf(currentTouchItem);
+        const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
+        const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+
+        items.forEach((it, index) => {
+            if (it === currentTouchItem) return;
+            if (boundedIndex > currentIndex && index > currentIndex && index <= boundedIndex) {
+                it.style.transform = 'translateY(' + (-itemHeight) + 'px)';
+            } else if (boundedIndex < currentIndex && index < currentIndex && index >= boundedIndex) {
+                it.style.transform = 'translateY(' + itemHeight + 'px)';
+            } else {
+                it.style.transform = '';
+            }
+        });
     }
-}
 
-function handleDragLeave(e) {
-    const item = e.target.closest('[data-index]');
-    if (item) {
-        item.classList.remove('bg-blue-500/10');
+    function onMouseUp(ev) {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (!currentTouchItem) return;
+
+        const moveY = ev.clientY - startY;
+        const itemHeight = currentTouchItem.offsetHeight;
+        const currentIndex = items.indexOf(currentTouchItem);
+        const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
+        const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+
+        if (boundedIndex !== currentIndex) {
+            const itemToMove = stocks[currentIndex];
+            stocks.splice(currentIndex, 1);
+            stocks.splice(boundedIndex, 0, itemToMove);
+            renderSettingsStockList();
+            renderStocks();
+            updateStockOrder();
+        } else {
+            items.forEach(it => { it.style.transform = ''; it.style.transition = ''; });
+        }
+
+        currentTouchItem.style.position = '';
+        currentTouchItem.style.zIndex = '';
+        currentTouchItem.style.transform = '';
+        currentTouchItem.classList.remove('touch-dragging');
+        currentTouchItem = null;
+        draggedItemIndex = null;
     }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
 }
 
-function handleDrop(e) {
-    e.preventDefault();
-    const dropItem = e.target.closest('[data-index]');
-    if (!dropItem || !draggedItem) return;
 
-    // 移除拖拉時的視覺效果
-    draggedItem.classList.remove('opacity-50');
-    dropItem.classList.remove('bg-blue-500/10');
+/* ═══════ STOCK ORDER ═══════ */
 
-    const dropIndex = parseInt(dropItem.dataset.index);
-    
-    // 重新排序股票
-    const itemToMove = stocks[draggedItemIndex];
-    stocks.splice(draggedItemIndex, 1);
-    stocks.splice(dropIndex, 0, itemToMove);
-
-    // 更新介面
-    renderSettingsStockList();
-    renderStocks();
-
-    // 更新後端
-    updateStockOrder();
-}
-
-// 更新後端股票順序
 async function updateStockOrder() {
     try {
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) return;
 
-        const tickers = stocks.map(stock => stock.ticker);
-        
         await fetch('/watchlist/reorder', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                user_email: userInfo.email,
-                tickers: tickers
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_email: userInfo.email, tickers: stocks.map(s => s.ticker) })
         });
     } catch (error) {
         console.error('更新股票順序時發生錯誤:', error);
     }
 }
 
-// 股票數據管理
+
+/* ═══════ PRICE UPDATE ═══════ */
+
 async function fetchStockPrice(ticker) {
     try {
-        const response = await fetch(`/stockprice/${ticker}`);
+        const response = await fetch('/stockprice/' + ticker);
         const data = await response.json();
-        if (data.error) {
-            console.error(`Error for ${ticker}:`, data.error);
-            return null;
-        }
-        return data;
+        return data.error ? null : data;
     } catch (error) {
-        console.error(`Error fetching price for ${ticker}:`, error);
+        console.error('Error fetching price for ' + ticker + ':', error);
         return null;
     }
 }
 
-// 更新股票 UI
-function updateStockUI(stockElement, priceData) {
-    if (!priceData) return;
+let pollTimer = null;
 
-    const priceElement = stockElement.querySelector('.price');
-    const changeElement = stockElement.querySelector('.change');
-    const preMarketElement = stockElement.querySelector('.premarket');
+function getPollingInterval() {
+    if (!stocks || !stocks.length) return 10000;
+    const states = stocks.map(s => s.market_state || '');
+    if (states.some(s => s === 'REGULAR')) return 10000;
+    if (states.some(s => s === 'PRE' || s === 'POST')) return 60000;
+    return 300000;
+}
 
-    if (priceElement) {
-        priceElement.textContent = priceData.price.toFixed(2);
-    }
-
-    if (changeElement && priceData.premarket) {
-        const change = ((priceData.price - priceData.premarket) / priceData.premarket * 100).toFixed(2);
-        changeElement.textContent = `${change > 0 ? '+' : ''}${change}%`;
-        changeElement.className = `text-sm ${change >= 0 ? 'price-up' : 'price-down'}`;
-    }
-
-    if (preMarketElement && priceData.premarket) {
-        preMarketElement.textContent = `盤前: ${priceData.premarket.toFixed(2)}`;
-    }
+function schedulePoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(async () => {
+        await updateStockPrices();
+        schedulePoll();
+    }, getPollingInterval());
 }
 
 async function updateStockPrices() {
     if (!stocks || !stocks.length) return;
-    
+
     try {
-        // 更新每個股票的價格
-        const updatedStocks = await Promise.all(stocks.map(async (stock) => {
+        const updated = await Promise.all(stocks.map(async (stock) => {
             try {
-                const response = await fetch(`/stockprice/${stock.ticker}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                const response = await fetch('/stockprice/' + stock.ticker);
+                if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
-                if (data.error) {
-                    console.error(`獲取 ${stock.ticker} 數據失敗:`, data.error);
-                    return stock;
-                }
-                // 合併新數據，但保留原有的資訊作為備用
+                if (data.error) return stock;
                 return {
-                    ...stock,  // 保留原有的所有資訊作為備用
-                    ...data,   // 使用新的資訊（包含 company_name 和 logo_url）
-                    company_name: data.company_name || stock.company_name, // 優先使用新的公司名稱
-                    logo_url: data.logo_url || stock.logo_url, // 優先使用新的 logo
+                    ...stock,
+                    ...data,
+                    company_name: data.company_name || stock.company_name,
+                    logo_url: data.logo_url || stock.logo_url,
                 };
-            } catch (error) {
-                console.error(`更新 ${stock.ticker} 時發生錯誤:`, error);
+            } catch {
                 return stock;
             }
         }));
-        
-        // 更新全局股票數據
-        stocks = updatedStocks;
-        
-        // 重新渲染股票列表
+
+        stocks = updated;
         renderStocks();
-        
-        // 更新最後更新時間
         updateLastUpdateTime();
-        
     } catch (error) {
         console.error('更新股票價格時發生錯誤:', error);
     }
 }
 
-// 渲染股票列表
-function renderStocks() {
-    const stockList = document.getElementById('stockList');
-    stockList.innerHTML = '';
 
-    stocks.forEach((stock, index) => {
-        const priceChangeClass = stock.price_change >= 0 ? 'price-up' : 'price-down';
-        const priceChangeIcon = stock.price_change >= 0 ? 'ri-arrow-up-s-fill' : 'ri-arrow-down-s-fill';
+/* ═══════ TIME ═══════ */
 
-        const stockItem = document.createElement('div');
-        stockItem.className = 'stock-item bg-secondary rounded-lg p-4';
-        stockItem.innerHTML = `
-            <div class="flex items-center gap-4">
-                <!-- 公司 Icon -->
-                <div class="flex-shrink-0">
-                    <img src="${stock.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(stock.ticker)}&background=random&color=fff`}" 
-                         alt="${stock.company_name}" 
-                         class="w-12 h-12 rounded-full object-cover bg-gray-700 overflow-hidden">
-                </div>
-
-                <!-- 股票資訊 -->
-                <div class="flex-1 space-y-1.5">
-                    <!-- 第一行：股票代號、市場狀態、收盤價、漲跌幅 -->
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium">${stock.ticker}</span>
-                            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
-                                ${getMarketStateText(stock.market_state)}
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-sm font-medium">$${stock.price.toFixed(2)}</span>
-                            <div class="flex items-center ${priceChangeClass} text-xs">
-                                <i class="${priceChangeIcon}"></i>
-                                <span>${Math.abs(stock.price_change_percent).toFixed(2)}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 第二行：公司名稱 -->
-                    <div class="text-sm text-gray-400">${stock.company_name}</div>
-
-                    <!-- 第三行：盤前/盤後資訊 -->
-                    <div class="flex justify-end text-xs text-gray-400">
-                        <div class="flex items-center gap-1.5">
-                            <span>${stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後'}</span>
-                            ${stock.extended_price ? 
-                                `<span>$${stock.extended_price.toFixed(2)}</span>
-                                <div class="flex items-center ${stock.extended_change >= 0 ? 'price-up' : 'price-down'}">
-                                    <i class="${stock.extended_change >= 0 ? 'ri-arrow-up-s-fill' : 'ri-arrow-down-s-fill'}"></i>
-                                    <span>${Math.abs(stock.extended_change_percent).toFixed(2)}%</span>
-                                </div>` : 
-                                '<span>暫無資料</span>'
-                            }
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        stockList.appendChild(stockItem);
-    });
-
-    // 更新最後更新時間
-    updateLastUpdateTime();
-}
-
-// 獲取市場狀態文字
-function getMarketStateText(state) {
-    switch (state) {
-        case 'PRE_MARKET':
-            return '盤前交易';
-        case 'REGULAR':
-            return '交易中';
-        case 'POST_MARKET':
-            return '盤後交易';
-        case 'CLOSED':
-            return '已收盤';
-        default:
-            return '未知狀態';
-    }
-}
-
-// 更新最後更新時間
 function updateLastUpdateTime() {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    
-    document.getElementById('lastUpdateTime').textContent = 
-        `最後更新：${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('lastUpdateTime').textContent =
+        now.getFullYear() + '/' + pad(now.getMonth() + 1) + '/' + pad(now.getDate()) + ' ' +
+        pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 }
 
-// 股票數據初始化邏輯
+
+/* ═══════ INIT ═══════ */
+
 async function initializeStocks() {
     try {
-        // 獲取使用者資訊
         const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) {
-            throw new Error('找不到使用者資訊');
-        }
+        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
-        // 從後端獲取股票數據
-        const response = await fetch(`/watchlist/${userInfo.email}`);
-        if (!response.ok) {
-            throw new Error('獲取股票數據失敗');
-        }
+        const response = await fetch('/watchlist/' + userInfo.email);
+        if (!response.ok) throw new Error('獲取股票數據失敗');
 
-        const stocksData = await response.json();
-        if (Array.isArray(stocksData)) {
-            stocks = stocksData;
-        } else {
-            stocks = initStockData();
-        }
+        const data = await response.json();
+        stocks = Array.isArray(data) ? data : initStockData();
 
-        // 渲染介面
         renderStocks();
         renderSettingsStockList();
-
-        // 開始定期更新
         updateStockPrices();
-        setInterval(updateStockPrices, 10000);
-
-        // 更新時間
+        schedulePoll();
         updateLastUpdateTime();
         setInterval(updateLastUpdateTime, 1000);
-
     } catch (error) {
         console.error('初始化股票數據時發生錯誤:', error);
         stocks = initStockData();
@@ -666,291 +647,138 @@ async function initializeStocks() {
     }
 }
 
-// 在頁面載入時初始化股票數據
 document.addEventListener('DOMContentLoaded', () => {
+    loadTheme();
     initializeStocks();
-    
-    // 初始化搜尋功能
+    renderMarketClock();
+    setInterval(renderMarketClock, 1000);
+
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
-    
     let searchTimeout;
 
     searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase();
-        if (!query) {
-            searchResults.classList.add('hidden');
-            return;
-        }
+        const query = e.target.value.trim();
+        if (!query) { searchResults.classList.add('hidden'); return; }
 
-        // 清除之前的 timeout
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-        }
+        if (searchTimeout) clearTimeout(searchTimeout);
 
-        // 設置新的 timeout，延遲 300ms 後執行搜尋
         searchTimeout = setTimeout(async () => {
             try {
-                // 呼叫自動完成 API
-                const response = await fetch(`/autocomplete/${encodeURIComponent(query)}`);
-                if (!response.ok) {
-                    throw new Error('搜尋失敗');
-                }
+                const response = await fetch('/autocomplete/' + encodeURIComponent(query));
+                if (!response.ok) throw new Error('搜尋失敗');
                 const results = await response.json();
 
-                // 顯示搜尋結果
                 searchResults.innerHTML = '';
                 searchResults.classList.remove('hidden');
-                
-                if (results.length === 0) {
-                    searchResults.innerHTML = `
-                        <div class="p-3 text-center text-gray-400 text-sm">
-                            找不到符合的股票
-                        </div>
-                    `;
+
+                if (!results.length) {
+                    searchResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);font:400 13px/1.30 var(--font)">找不到符合的股票</div>';
                     return;
                 }
 
                 results.forEach(stock => {
-                    const resultItem = document.createElement('div');
-                    resultItem.className = 'flex items-center justify-between p-3 bg-secondary rounded-lg cursor-pointer hover:bg-blue-600/10';
-                    resultItem.onclick = () => addToWatchlist(stock.symbol);
-                    
-                    resultItem.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center">
-                                <span class="text-blue-600 font-medium">${stock.symbol[0]}</span>
-                            </div>
-                            <div>
-                                <div class="font-medium">${stock.symbol}</div>
-                                <div class="text-sm text-gray-400">${stock.name}</div>
-                                <div class="text-xs text-gray-500">${stock.exchange}</div>
-                            </div>
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.onclick = () => addToWatchlist(stock.symbol);
+                    item.innerHTML = `
+                        <div class="search-result-tile" style="background:${getTileGradient(stock.symbol)}">${stock.symbol[0]}</div>
+                        <div class="search-result-info">
+                            <div class="result-symbol">${stock.symbol}</div>
+                            <div class="result-name">${stock.name}${stock.exchange ? ' (' + stock.exchange + ')' : ''}</div>
                         </div>
-                        <button class="w-8 h-8 flex items-center justify-center text-blue-600">
-                            <i class="ri-add-line"></i>
-                        </button>
-                    `;
-                    
-                    searchResults.appendChild(resultItem);
+                        <div class="search-result-add">${SVG_ADD}</div>`;
+                    searchResults.appendChild(item);
                 });
             } catch (error) {
                 console.error('搜尋時發生錯誤:', error);
-                searchResults.innerHTML = `
-                    <div class="p-3 text-center text-gray-400 text-sm">
-                        搜尋時發生錯誤
-                    </div>
-                `;
+                searchResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);font:400 13px/1.30 var(--font)">搜尋時發生錯誤</div>';
             }
         }, 300);
     });
 
-    // 點擊其他地方時隱藏搜尋結果
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('#searchInput') && !e.target.closest('#searchResults')) {
+        if (!e.target.closest('#searchInput') && !e.target.closest('#searchResults') && !e.target.closest('.search-field')) {
             searchResults.classList.add('hidden');
         }
     });
 });
 
-// AI 聊天功能
-let isChatWindowOpen = false;
 
-function toggleChatWindow() {
-    const chatWindow = document.getElementById('chatWindow');
-    isChatWindowOpen = !isChatWindowOpen;
-    chatWindow.style.display = isChatWindowOpen ? 'block' : 'none';
-}
+/* ═══════ CHAT ═══════ */
 
 async function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const chatMessages = document.getElementById('chatMessages');
     const message = messageInput.value.trim();
-    
     if (!message) return;
-    
-    // 添加用戶訊息
-    const userMessageDiv = document.createElement('div');
-    userMessageDiv.className = 'mb-2';
-    userMessageDiv.innerHTML = `
-        <div class="flex justify-end">
-            <div class="bg-[#0B93F6] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative mr-2">
-                ${escapeHtml(message)}
-            </div>
-        </div>
-    `;
-    chatMessages.appendChild(userMessageDiv);
-    
-    // 清空輸入框
+
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble chat-bubble-user';
+    userBubble.textContent = message;
+    chatMessages.appendChild(userBubble);
+
     messageInput.value = '';
-    
-    // 添加載入中動畫
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'mb-2';
-    loadingDiv.innerHTML = `
-        <div class="flex">
-            <div class="bg-[#303030] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative ml-2">
-                <div class="flex space-x-1">
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
-                </div>
-            </div>
-        </div>
-    `;
-    chatMessages.appendChild(loadingDiv);
-    
-    // 滾動到底部
+
+    const loadingBubble = document.createElement('div');
+    loadingBubble.className = 'chat-bubble chat-bubble-ai';
+    loadingBubble.innerHTML = '<div class="chat-loading"><span></span><span></span><span></span></div>';
+    chatMessages.appendChild(loadingBubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message })
         });
-        
+
         const data = await response.json();
-        
-        // 添加 AI 回覆
-        const aiMessageDiv = document.createElement('div');
-        aiMessageDiv.className = 'mb-2';
-        const messageHtml = marked.parse(data.response.trim());
-        aiMessageDiv.innerHTML = `
-            <div class="flex">
-                <div class="bg-[#303030] text-white rounded-[20px] py-[6px] px-[10px] max-w-[70%] relative ml-2 markdown-content whitespace-pre-line">
-                    ${messageHtml}
-                </div>
-            </div>
-        `;
-        chatMessages.appendChild(aiMessageDiv);
-        
-    } catch (error) {
-        // 顯示錯誤訊息
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'mb-2';
-        errorDiv.innerHTML = `
-            <div class="flex">
-                <div class="bg-[#303030] text-white rounded-[20px] py-[8px] px-[12px] max-w-[70%] relative ml-2">
-                    發生錯誤，請稍後再試
-                </div>
-            </div>
-        `;
-        chatMessages.appendChild(errorDiv);
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'chat-bubble chat-bubble-ai';
+        aiBubble.innerHTML = '<div class="markdown-content">' + marked.parse(data.response.trim()) + '</div>';
+        chatMessages.appendChild(aiBubble);
+    } catch {
+        const errBubble = document.createElement('div');
+        errBubble.className = 'chat-bubble chat-bubble-ai';
+        errBubble.textContent = '發生錯誤，請稍後再試';
+        chatMessages.appendChild(errBubble);
     } finally {
-        // 移除載入中動畫
-        if (loadingDiv && loadingDiv.parentNode === chatMessages) {
-            chatMessages.removeChild(loadingDiv);
-        }
-        
-        // 滾動到底部
+        if (loadingBubble.parentNode === chatMessages) chatMessages.removeChild(loadingBubble);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 }
 
-// 防止 XSS 攻擊的輔助函數
-function escapeHtml(unsafe) {
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+
+/* ═══════ TOAST ═══════ */
+
+function showToast(message) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => { toast.classList.add('visible'); });
+
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
+    }, 3000);
 }
 
-// 添加樣式到 head
-const style = document.createElement('style');
-style.textContent = `
-    .markdown-content {
-        line-height: 1.3;
-        font-size: 0.95rem;
-    }
-    .markdown-content p {
-        margin: 0;
-    }
-    .markdown-content p:not(:last-child) {
-        margin-bottom: 0.3em;
-    }
-    .markdown-content strong {
-        color: #fff;
-        font-weight: 700;
-    }
-    .markdown-content em {
-        font-style: italic;
-        color: #e2e8f0;
-    }
-    .markdown-content ul, .markdown-content ol {
-        margin: 0;
-        padding-left: 1.2em;
-    }
-    .markdown-content li {
-        margin: 0;
-    }
-    .markdown-content code {
-        background: rgba(255,255,255,0.1);
-        padding: 0.2em 0.4em;
-        border-radius: 3px;
-        font-size: 0.9em;
-    }
-    .markdown-content br {
-        display: none;
-    }
-`;
-document.head.appendChild(style);
-
-// 顯示 toast 通知
-function showToast(message, type = 'error') {
-    // 檢查是否已存在 toast 容器
-    let toastContainer = document.getElementById('toastContainer');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toastContainer';
-        toastContainer.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 9999;
-            width: 100%;
-            max-width: 320px;
-            padding: 0 16px;
-        `;
-        document.body.appendChild(toastContainer);
-    }
-
-    // 創建新的 toast
-    const toast = document.createElement('div');
-    toast.className = type === 'error' ? 'bg-red-500' : 'bg-blue-500';
-    toast.style.cssText = `
-        color: white;
-        padding: 12px 16px;
-        border-radius: 8px;
-        text-align: center;
-        opacity: 0;
-        transform: translateY(20px);
-        transition: all 0.3s ease;
-        font-size: 14px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    `;
-    toast.textContent = message;
-
-    // 添加到容器
-    toastContainer.appendChild(toast);
-
-    // 觸發動畫
-    setTimeout(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateY(0)';
-    }, 100);
-
-    // 3秒後移除
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(20px)';
-        setTimeout(() => {
-            toastContainer.removeChild(toast);
-        }, 300);
-    }, 3000);
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }

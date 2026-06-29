@@ -2,222 +2,154 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=393px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyStock</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Stock</title>
     <link href="/static/styles.css" rel="stylesheet">
+    <script>
+        (function(){var t=localStorage.getItem('sw-theme')||'light';document.documentElement.setAttribute('data-theme',t)})();
+    </script>
 </head>
-<body class="pb-[72px]">
-    <!-- 頂部導航欄 -->
-    <header class="fixed top-0 w-full bg-[#0A0C10] z-50">
-        <div class="flex items-center justify-between px-4 h-14">
-            <div class="flex items-center gap-4">
-                <h1 class="text-lg font-medium">My Stock</h1>
-                <div id="lastUpdateTime" class="text-[10px] text-gray-400">最後更新：--:--:--</div>
-            </div>
-            <div class="flex items-center gap-4">
-                <button class="w-8 h-8 flex items-center justify-center" onclick="toggleChatWindow()">
-                    <i class="ri-message-3-line text-xl"></i>
-                </button>
-                <button class="w-8 h-8 flex items-center justify-center" onclick="toggleSettingsPage()">
-                    <i class="ri-settings-3-line text-xl"></i>
-                </button>
-            </div>
+<body>
+
+    <!-- Top Nav -->
+    <header class="nav-top">
+        <span class="nav-title">My Stock</span>
+        <span class="nav-update" id="lastUpdateTime">--:--:--</span>
+        <div class="nav-actions">
+            <button class="nav-icon-btn" onclick="toggleChatWindow()" aria-label="AI 助理">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button class="nav-icon-btn" onclick="toggleSettingsPage()" aria-label="設置">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </button>
         </div>
     </header>
 
-    <!-- 消息中心彈窗 -->
-    <div id="messageModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
-        <div class="bg-[#0A0C10] w-[90%] max-w-md rounded-lg absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium">消息中心</h3>
-                <button onclick="toggleMessageModal()" class="w-8 h-8 flex items-center justify-center">
-                    <i class="ri-close-line text-xl"></i>
+    <!-- Hero Card -->
+    <div class="hero-card">
+        <div class="hero-main">
+            <div class="ty-eyebrow">WATCHLIST</div>
+            <div class="ty-hero" id="heroTitle">My Stock</div>
+            <div class="hero-caption" id="heroCaption">載入中...</div>
+        </div>
+        <div class="market-clock" id="marketClock"></div>
+    </div>
+
+    <!-- Stock List -->
+    <main class="page-content">
+        <div class="v2-card" id="stockListCard">
+            <div id="stockList"></div>
+        </div>
+    </main>
+
+    <!-- Search Bar -->
+    <div class="search-bar-wrap">
+        <div class="search-field">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="searchInput" placeholder="搜尋股票代號或名稱...">
+        </div>
+        <div id="searchResults" class="search-results hidden"></div>
+    </div>
+
+    <!-- Settings Sheet -->
+    <div id="settingsPage" class="sheet hidden">
+        <div class="sheet-nav">
+            <button class="sheet-back" onclick="toggleSettingsPage()">
+                <svg width="10" height="18" viewBox="0 0 10 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L1 9l8 8"/></svg>
+                完成
+            </button>
+            <span class="sheet-title">設置</span>
+        </div>
+
+        <div class="settings-user-card">
+            <img id="userAvatar" class="settings-avatar" src="" alt="">
+            <div class="settings-user-info">
+                <div class="user-name" id="userName">載入中...</div>
+                <div class="user-email" id="userEmail">載入中...</div>
+            </div>
+            <button class="pill-btn pill-btn-danger" onclick="logout()">登出</button>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-section-title">外觀</div>
+            <div class="v2-card">
+                <div class="settings-row-simple">
+                    <span class="settings-row-label">主題</span>
+                    <div class="segmented-control" id="themeToggle">
+                        <button class="seg-btn active" data-theme="light" onclick="setTheme('light')">淺色</button>
+                        <button class="seg-btn" data-theme="dark" onclick="setTheme('dark')">深色</button>
+                        <div class="seg-thumb"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-section-title">自選股</div>
+            <div class="v2-card">
+                <div id="settingsStockList"></div>
+            </div>
+        </div>
+        <div class="settings-bottom-pad"></div>
+    </div>
+
+    <!-- Chat Sheet -->
+    <div id="chatWindow" class="sheet hidden">
+        <div class="chat-sheet">
+            <div class="sheet-nav">
+                <span class="sheet-title">AI 助理</span>
+                <button class="nav-icon-btn" onclick="toggleChatWindow()" style="margin-left:auto">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
-            <div class="space-y-4">
-                <!-- 系統通知 -->
-                <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
-                        <i class="ri-notification-4-line text-xl"></i>
-                    </div>
-                    <div>
-                        <div class="font-medium mb-1">系統通知</div>
-                        <div class="text-sm text-gray-400">PLTR 已突破前高位置，建議關注</div>
-                        <div class="text-xs text-gray-500 mt-1">2025-02-28 13:05</div>
-                    </div>
-                </div>
-                <!-- 價格提醒 -->
-                <div class="flex items-start gap-3 p-3 rounded-lg bg-secondary">
-                    <div class="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center shrink-0">
-                        <i class="ri-line-chart-line text-xl"></i>
-                    </div>
-                    <div>
-                        <div class="font-medium mb-1">價格提醒</div>
-                        <div class="text-sm text-gray-400">SMCI 已達到您設置的目標價格</div>
-                        <div class="text-xs text-gray-500 mt-1">2025-02-28 12:30</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- 設置頁面 -->
-    <div id="settingsPage" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
-        <div class="h-full overflow-y-auto">
-            <header class="fixed top-0 w-full bg-[#0A0C10] z-50">
-                <div class="flex items-center px-4 h-14">
-                    <button class="w-8 h-8 flex items-center justify-center mr-2" onclick="toggleSettingsPage()">
-                        <i class="ri-arrow-left-line text-xl"></i>
-                    </button>
-                    <h1 class="text-lg font-medium">設置</h1>
-                </div>
-            </header>
-            <main class="mt-14 px-4">
-                <!-- 用戶資料 -->
-                <div class="flex items-center justify-between p-4 bg-secondary rounded-lg mb-6">
-                    <div class="flex items-center gap-3">
-                        <img id="userAvatar" class="w-12 h-12 rounded-full" src="" alt="用戶頭像">
-                        <div>
-                            <div id="userName" class="font-medium">載入中...</div>
-                            <div id="userEmail" class="text-sm text-gray-400">載入中...</div>
-                        </div>
-                    </div>
-                    <button onclick="logout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm">
-                        登出
-                    </button>
-                </div>
-                <!-- 所有股票列表 -->
-                <div class="mb-6">
-                    <h2 class="text-lg font-medium mb-3">股票列表</h2>
-                    <div class="space-y-3" id="settingsStockList"></div>
-                </div>
-            </main>
-        </div>
-    </div>
-
-
-    <!-- AI 聊天窗口 -->
-    <div id="chatWindow" class="fixed inset-0 bg-[#0A0C10] z-50 hidden">
-        <div class="flex flex-col h-full">
-            <!-- 聊天窗口頂部 -->
-            <div class="flex items-center justify-between px-4 py-3">
-                <h2 class="text-lg font-medium">AI 助理</h2>
-                <button onclick="toggleChatWindow()" class="w-8 h-8 flex items-center justify-center">
-                    <i class="ri-close-line text-xl"></i>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input-bar">
+                <input type="text" id="messageInput" class="chat-input"
+                       placeholder="輸入訊息..."
+                       onkeypress="if(event.key==='Enter')sendMessage()">
+                <button class="chat-send-btn" onclick="sendMessage()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
             </div>
-            
-            <!-- 聊天訊息區域 -->
-            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
-            
-            <!-- 輸入區域 -->
-            <div class="p-4">
-                <div class="flex gap-2">
-                    <input type="text" id="messageInput" 
-                           class="flex-1 bg-gray-800 rounded-lg px-4 py-2 text-sm focus:outline-none"
-                           placeholder="輸入訊息..."
-                           onkeypress="if(event.key === 'Enter') sendMessage()">
-                    <button onclick="sendMessage()" 
-                            class="w-10 h-10 flex items-center justify-center bg-blue-600 rounded-lg">
-                        <i class="ri-send-plane-fill"></i>
-                    </button>
-                </div>
-            </div>
         </div>
     </div>
 
-
-    <!-- 主要內容區域 -->
-    <main class="mt-14 px-4 transition-all duration-300">
-        <div class="space-y-3" id="stockList"></div>
-    </main><!-- 底部搜尋欄 -->
-    <div class="fixed bottom-0 w-full bg-[#0A0C10]">
-        <div class="px-4 py-2 flex items-center bg-secondary rounded-lg mx-4 my-2">
-            <i class="ri-search-line text-gray-400 mr-2"></i>
-            <input type="text" id="searchInput" 
-                   placeholder="搜尋股票代號或名稱..." 
-                   class="bg-transparent flex-1 text-sm focus:outline-none placeholder-gray-400">
-        </div>
-        <div id="searchResults" class="hidden mx-4 mb-2 space-y-2 max-h-[200px] overflow-y-auto bg-[#0A0C10]">
-        </div>
-    </div>
-
-    <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        // 設定 marked 選項
-        marked.setOptions({
-            breaks: true,  // 支援換行
-            gfm: true     // 支援 GitHub Flavored Markdown
-        });
-        // 檢查登入狀態
+        marked.setOptions({ breaks: true, gfm: true });
+
         window.onload = function() {
             const token = sessionStorage.getItem('google_token');
-            if (!token) {
-                window.location.href = '/';
-                return;
-            }
+            if (!token) { window.location.href = '/'; return; }
 
-            // 載入用戶資訊
             const userInfo = JSON.parse(sessionStorage.getItem('user_info') || '{}');
             if (userInfo.name) {
                 document.getElementById('userName').textContent = userInfo.name;
                 document.getElementById('userEmail').textContent = userInfo.email;
-                
-                // 處理頭像
                 const avatarImg = document.getElementById('userAvatar');
                 if (userInfo.picture) {
                     avatarImg.onerror = function() {
-                        // 如果 Google 頭像載入失敗，使用備用頭像
-                        const backgroundColor = getRandomColor();
-                        this.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=${backgroundColor}&color=white`;
+                        this.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userInfo.name) + '&background=0071e3&color=fff&bold=true&size=96';
                     };
                     avatarImg.src = userInfo.picture;
                 } else {
-                    const backgroundColor = getRandomColor();
-                    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=${backgroundColor}&color=white`;
+                    avatarImg.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userInfo.name) + '&background=0071e3&color=fff&bold=true&size=96';
                 }
             }
 
-            // 驗證 token
-            fetch(`/verify_token?token=${token}`, {
+            fetch('/verify_token?token=' + token, {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
             })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Token 驗證失敗');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (!data.valid) {
-                        logout();
-                    }
-                })
-                .catch((error) => {
-                    console.error('驗證錯誤:', error);
-                    logout();
-                });
+            .then(r => { if (!r.ok) throw new Error('Token 驗證失敗'); return r.json(); })
+            .then(data => { if (!data.valid) logout(); })
+            .catch(() => logout());
         };
 
-        // 登出功能
         function logout() {
             sessionStorage.removeItem('google_token');
             sessionStorage.removeItem('user_info');
             window.location.href = '/';
-        }
-
-        // 取得隨機顏色
-        function getRandomColor() {
-            const colors = ['#3498db', '#f1c40f', '#2ecc71', '#e74c3c', '#9b59b6'];
-            return colors[Math.floor(Math.random() * colors.length)];
         }
     </script>
     <script src="/static/main.js"></script>
