@@ -14,6 +14,19 @@ def _tw_market_state() -> str:
     return "CLOSED"
 
 
+def _first_quote(field: str) -> float | None:
+    """從 '_' 分隔的五檔報價字串取第一個有效價格。"""
+    for part in field.split("_"):
+        if part and part != "-":
+            try:
+                v = float(part)
+            except ValueError:
+                continue
+            if v > 0:
+                return v
+    return None
+
+
 def _ticker_to_ex_ch(ticker: str) -> str:
     """將 Yahoo 格式的台股代號轉換為 TWSE API 的 ex_ch 參數。
     例如: '2330.TW' -> 'tse_2330.tw', '6510.TWO' -> 'otc_6510.tw'
@@ -72,6 +85,17 @@ async def fetch_twse_quote(ticker: str) -> dict | None:
         elif stock.get("pz") and stock["pz"] != "-":
             # 試撮價格作為備用
             price = float(stock["pz"])
+        else:
+            # TWSE 快照常無最新成交價（z="-"），改用最佳買賣盤中價估當前價，
+            # 避免 fallback 到延遲約 20 分鐘的 yfinance
+            bid = _first_quote(stock.get("b", ""))
+            ask = _first_quote(stock.get("a", ""))
+            if bid and ask:
+                price = round((bid + ask) / 2, 2)
+            elif bid:
+                price = bid
+            elif ask:
+                price = ask
 
         prev_close = None
         if y and y != "-":
