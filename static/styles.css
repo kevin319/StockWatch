@@ -247,6 +247,35 @@ img { display: block; max-width: 100%; }
 .v2-row.flash-up   { animation: flashUp 0.8s ease-out; }
 .v2-row.flash-down { animation: flashDown 0.8s ease-out; }
 
+/* 首次載入：列淡入 */
+@keyframes rowEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.v2-row.row-enter { animation: rowEnter 0.4s ease both; }
+
+/* 載入骨架 shimmer */
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 54px 108px;
+  gap: 10px; align-items: center; padding: 12px 20px;
+}
+.skeleton-row + .skeleton-row { border-top: 0.5px solid var(--hairline); }
+.sk { background: var(--well); border-radius: 6px; position: relative; overflow: hidden; }
+.sk::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.3s infinite;
+}
+[data-theme="dark"] .sk::after {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.sk-tile  { width: 40px; height: 40px; border-radius: 50%; }
+.sk-line  { height: 12px; }
+.sk-line.w1 { width: 55%; }
+.sk-line.w2 { width: 80%; margin-top: 7px; }
+.sk-spark { height: 20px; }
+.sk-price { height: 14px; }
+
 .v2-tile {
   width: 40px; height: 40px;
   border-radius: 50%;
