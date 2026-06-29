@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from google.oauth2 import id_token
 from google.auth.transport import requests
+import asyncio
 import logging
 import os
 from dotenv import load_dotenv
@@ -28,16 +29,17 @@ async def verify_token(token: str):
         if not client_id:
             raise HTTPException(status_code=500, detail="未設定 Google Client ID")
 
-        # 驗證 Google Token
-        idinfo = id_token.verify_oauth2_token(
-            token, requests.Request(), client_id)
+        # 驗證 Google Token（會對 Google 發網路請求，丟到執行緒避免阻塞 event loop）
+        idinfo = await asyncio.to_thread(
+            id_token.verify_oauth2_token, token, requests.Request(), client_id)
 
         if idinfo['aud'] != client_id:
             raise ValueError('錯誤的 Client ID')
 
         # 更新或創建用戶資料
         try:
-            user = upsert_user(
+            user = await asyncio.to_thread(
+                upsert_user,
                 email=idinfo['email'],
                 name=idinfo.get('name', ''),
                 picture=idinfo.get('picture', '')
