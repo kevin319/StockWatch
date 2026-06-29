@@ -19,6 +19,9 @@ last_upsert_times = {}
 # 記錄 Yahoo Finance 的快取
 yahoo_cache = {}
 
+# sparkline 走勢快取（變動慢，快取較久）
+sparkline_cache = {}
+
 
 def _supplement_us_extended(ticker: str, data: dict) -> None:
     """美股經 Finnhub 取得時補上盤前/盤後價（Finnhub 免費版無此資料）。
@@ -260,6 +263,26 @@ async def get_stock_price(ticker: str):
             'error': str(e),
             'ticker': ticker
         }
+
+@router.get("/sparkline/{ticker}")
+async def get_sparkline(ticker: str):
+    """回傳近一個月日收盤序列，供前端畫迷你走勢圖。全市場通用，快取 30 分鐘。"""
+    try:
+        now = datetime.now()
+        if ticker in sparkline_cache:
+            ts, cached = sparkline_cache[ticker]
+            if now - ts < timedelta(minutes=30):
+                return cached
+
+        hist = yf.Ticker(ticker).history(period="1mo", interval="1d")
+        closes = [round(float(c), 4) for c in hist["Close"].dropna().tolist()][-30:]
+        data = {"ticker": ticker, "points": closes}
+        sparkline_cache[ticker] = (now, data)
+        return data
+    except Exception as e:
+        print(f"sparkline 取得失敗: {ticker} {e}")
+        return {"ticker": ticker, "points": []}
+
 
 @router.get("/stock/{ticker}")
 async def get_stock(ticker: str):

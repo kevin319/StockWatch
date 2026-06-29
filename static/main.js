@@ -65,12 +65,13 @@ let draggedItem = null;
 let draggedItemIndex = null;
 let touchStartY = null;
 let currentTouchItem = null;
+let sparkData = {}; // ticker -> 近期收盤序列
 
 function initStockData() {
     stocks = [
         { ticker: 'CWEB', company_name: 'Direxion Daily CSI China Internet Bull 2X', price: 43.63, prev_close: 44.50, price_change: -0.87, price_change_percent: -1.96, market_state: 'REGULAR', extended_price: 40.90, extended_type: 'PRE_MARKET', extended_change: -2.73, extended_change_percent: -6.25 },
         { ticker: 'PLTR', company_name: 'Palantir Technologies Inc.', price: 24.77, prev_close: 25.20, price_change: -0.43, price_change_percent: -1.71, market_state: 'REGULAR', extended_price: 0, extended_type: '', extended_change: 0, extended_change_percent: 0 },
-        { ticker: '2330.TW', company_name: '台灣積體電路製造股份有限公司', price: 84.77, prev_close: 85.20, price_change: -0.43, price_change_percent: -0.51, market_state: 'REGULAR', extended_price: 83.74, extended_type: 'PRE_MARKET', extended_change: -1.03, extended_change_percent: -1.21 },
+        { ticker: '2330.TW', company_name: '台灣積體電路製造股份有限公司', price: 2390.0, prev_close: 2340.0, price_change: 50.0, price_change_percent: 2.14, market_state: 'REGULAR', extended_price: 0, extended_type: '', extended_change: 0, extended_change_percent: 0 },
     ];
     return stocks;
 }
@@ -212,6 +213,25 @@ function tileHtml(stock) {
     return `<div class="v2-tile"><span class="tile-initial" style="background:${grad}">${label}</span></div>`;
 }
 
+// 由收盤序列產生迷你走勢圖 SVG，依區間淨變動上色（紅漲綠跌）
+function sparklineSvg(points) {
+    if (!points || points.length < 2) return '';
+    const w = 54, h = 28, pad = 3;
+    const min = Math.min(...points), max = Math.max(...points);
+    const range = (max - min) || 1;
+    const stepX = (w - pad * 2) / (points.length - 1);
+    const coords = points.map((p, i) => {
+        const x = pad + i * stepX;
+        const y = pad + (h - pad * 2) * (1 - (p - min) / range);
+        return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    const up = points[points.length - 1] >= points[0];
+    const color = up ? 'var(--negative)' : 'var(--positive)'; // 紅漲綠跌
+    return `<svg class="spark-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+        <polyline points="${coords}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`;
+}
+
 function renderStocks() {
     const stockList = document.getElementById('stockList');
     stockList.innerHTML = '';
@@ -249,6 +269,7 @@ function renderStocks() {
                 </div>
                 <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
             </div>
+            <div class="row-spark">${sparklineSvg(sparkData[stock.ticker])}</div>
             <div class="row-price">
                 <span class="price-main">$${stock.price.toFixed(2)}</span>
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
@@ -263,6 +284,22 @@ function renderStocks() {
 
     updateHeroCaption();
     updateLastUpdateTime();
+}
+
+// 載入各股票走勢序列（變動慢，每檔抓一次即可），完成後重繪
+async function loadSparklines() {
+    const targets = stocks.filter(s => !(s.ticker in sparkData));
+    if (!targets.length) return;
+    await Promise.all(targets.map(async (s) => {
+        try {
+            const res = await fetch('/sparkline/' + s.ticker);
+            const data = await res.json();
+            sparkData[s.ticker] = Array.isArray(data.points) ? data.points : [];
+        } catch {
+            sparkData[s.ticker] = [];
+        }
+    }));
+    renderStocks();
 }
 
 function updateHeroCaption() {
@@ -357,6 +394,7 @@ async function addToWatchlist(ticker) {
         stocks.push(stockData);
         renderSettingsStockList();
         renderStocks();
+        loadSparklines();
 
         document.getElementById('searchResults').classList.add('hidden');
         document.getElementById('searchInput').value = '';
@@ -645,6 +683,7 @@ async function initializeStocks() {
 
         renderStocks();
         renderSettingsStockList();
+        loadSparklines();
         updateStockPrices();
         schedulePoll();
         updateLastUpdateTime();
