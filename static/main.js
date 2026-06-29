@@ -167,25 +167,34 @@ function formatCountdown(min) {
 }
 
 function renderMarketClock() {
-    const el = document.getElementById('marketClock');
-    if (!el) return;
+    const board = document.getElementById('marketClock');
+    if (!board) return;
     const pad = n => String(n).padStart(2, '0');
+    let openCount = 0;
 
-    el.innerHTML = MARKETS.map(m => {
+    board.innerHTML = MARKETS.map(m => {
         const info = getMarketClockInfo(m);
-        let status;
+        let statusInner, sub = '';
         if (info.open) {
-            status = '<span class="mc-status mc-open"><span class="mc-dot"></span>交易中</span>';
+            openCount++;
+            statusInner = '<span class="mb-dot"></span>交易中';
         } else if (info.countdownMin != null) {
             // 下次開盤的使用者當地時間 ≈ 現在 + 倒數分鐘（與倒數採同一近似）
             const openLocal = new Date(Date.now() + info.countdownMin * 60000);
-            const openStr = pad(openLocal.getHours()) + ':' + pad(openLocal.getMinutes());
-            status = `<span class="mc-status"><span class="mc-time">${openStr}開</span>倒數 ${formatCountdown(info.countdownMin)}</span>`;
+            sub = pad(openLocal.getHours()) + ':' + pad(openLocal.getMinutes()) + '開';
+            statusInner = formatCountdown(info.countdownMin);
         } else {
-            status = '<span class="mc-status">休市</span>';
+            statusInner = '休市';
         }
-        return `<div class="mc-row"><span class="mc-name">${m.name}</span>${status}</div>`;
+        return `<div class="mb-cell">
+            <div class="mb-name">${m.name}</div>
+            <div class="mb-status">${statusInner}</div>
+            <div class="mb-sub">${sub}</div>
+        </div>`;
     }).join('');
+
+    const summary = document.getElementById('heroSummary');
+    if (summary) summary.textContent = openCount + ' / 4 開盤';
 }
 
 

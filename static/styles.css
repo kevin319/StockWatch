@@ -129,79 +129,81 @@ img { display: block; max-width: 100%; }
 .nav-icon-btn:active { background: var(--well); }
 
 
-/* ═══════ HERO CARD ═══════ */
+/* ═══════ HERO CARD — 市場儀表板 ═══════ */
 
 .hero-card {
   margin: 96px 16px 0;
-  padding: 24px 24px 20px;
+  padding: 18px 20px 20px;
   border-radius: var(--radius-card);
   background:
-    radial-gradient(110% 60% at 15% 5%, rgba(255,255,255,0.4), transparent 55%),
-    conic-gradient(from 200deg at 55% 42%,
-      #ffd17a 0deg, #ff89b5 55deg, #b78dff 130deg,
-      #7de0ff 210deg, #ffea8d 290deg, #ffd17a 360deg);
+    radial-gradient(130% 90% at 85% -10%, rgba(94,124,255,0.22), transparent 60%),
+    linear-gradient(165deg, #20222a, #0e0f13);
   box-shadow: var(--shadow-hero);
   color: #fff;
+}
+
+.hero-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 16px;
 }
 
-.hero-main { min-width: 0; }
-
-.hero-card .ty-eyebrow { color: rgba(255,255,255,0.8); margin-bottom: 6px; }
-.hero-card .ty-hero    { color: #fff; margin-bottom: 4px; }
-
-.hero-caption {
-  font: 400 14px/1.30 var(--font);
-  letter-spacing: -0.08px;
-  color: rgba(255,255,255,0.85);
+.hero-label {
+  font: 700 12px/1 var(--font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
 }
 
-/* 四市場開盤時鐘 */
-.market-clock {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.mc-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  font: 500 12px/1.2 var(--font);
-  color: rgba(255,255,255,0.92);
-  white-space: nowrap;
-}
-
-.mc-name { font-weight: 700; }
-
-.mc-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.hero-summary {
+  font: 600 13px/1 var(--font);
+  color: rgba(255,255,255,0.82);
   font-variant-numeric: tabular-nums;
 }
 
-.mc-open { color: #eaffea; }
+/* 四市場儀表板 */
+.market-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
 
-.mc-dot {
+.mb-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mb-name {
+  font: 600 12px/1 var(--font);
+  color: rgba(255,255,255,0.5);
+}
+
+.mb-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 15px/1.1 var(--font);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+.mb-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #34d36b;
-  box-shadow: 0 0 6px #34d36b;
+  background: #2fd66b;
+  box-shadow: 0 0 7px rgba(47,214,107,0.8);
+  flex-shrink: 0;
 }
 
-.mc-time { color: rgba(255,255,255,0.7); }
-
-@media (max-width: 480px) {
-  .hero-card { flex-direction: column; }
-  .market-clock { align-self: stretch; }
-  .mc-row { justify-content: flex-start; }
+.mb-sub {
+  font: 500 11px/1 var(--font);
+  color: rgba(255,255,255,0.38);
+  min-height: 11px;
 }
 
 
