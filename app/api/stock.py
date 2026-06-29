@@ -51,6 +51,15 @@ def _supplement_us_extended(ticker: str, data: dict) -> None:
         print(f"美股盤前/盤後補充失敗: {ticker} {e}")
 
 
+async def get_logo_url(ticker: str) -> str | None:
+    """provider 未提供 logo（台股/港股/陸股）時的後備來源。
+
+    這些市場的代號無可靠的公司網域可查 favicon，目前回傳 None；
+    前端 tileHtml 會自動以彩色字母圖示替代。
+    """
+    return None
+
+
 @router.get("/stockprice/{ticker}")
 async def get_stock_price(ticker: str):
     try:
