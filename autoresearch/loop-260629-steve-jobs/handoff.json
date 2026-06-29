@@ -1,0 +1,29 @@
+{
+  "version": "2.1.0",
+  "source": "loop",
+  "timestamp": "2026-06-29T04:11:58Z",
+  "status": "COMPLETE",
+  "results_tsv": "autoresearch/loop-260629-steve-jobs/results.tsv",
+  "config": {
+    "goal": "用 Steve Jobs 當作產品經理，refine 目前功能/體驗/UI",
+    "scope": "static/index.html, static/main.js, static/styles.css, app/api/*",
+    "metric": "加權未解決設計問題數 (P0×3, P1×2, P2×1)",
+    "direction": "lower_is_better",
+    "verify": "Steve Jobs 人格設計批判 + playwright 截圖審視（主觀目標，非自動數值）",
+    "stop_condition": "無 P0/P1 殘留（Jobs 滿意）"
+  },
+  "result": { "start_metric": 13, "final_metric": 0, "iterations_kept": 6, "iterations_discarded": 0 },
+  "findings": [
+    "Iteration 1 (da5db28): Hero 從彩虹裝飾改為沉穩深色市場儀表板，市場時鐘成主角，與登入頁設計語言統一",
+    "Iteration 2 (7d946ee): 導覽列秒數跳動改為「更新 HH:MM」；深色 hero 加邊框拉開層次",
+    "Iteration 3 (992a7e3): 新增 /sparkline 端點與每列迷你走勢圖（紅漲綠跌）；修各列水平對齊（價格欄固定寬）",
+    "Iteration 4 (b61da7e): 後端 REGULAR 快取 15s→8s + 前端 no-store，達成交易中每 10 秒更新；價格變動微閃爍",
+    "Iteration 5 (9021761): 載入骨架 shimmer + 首次淡入，取代「載入中」",
+    "Iteration 6 (7c418b1): 功能正確性 — 幣別標示(NT$/HK$/¥/$) + 美股冬令(zoneinfo 取代寫死 UTC-4)"
+  ],
+  "open_items": [
+    "#3 國定假日感知（hero/provider 仍忽略假日；需各市場假日行事曆）",
+    "大功能：股票詳情頁/K線、到價提醒、持股損益",
+    "#8 yfinance 同步呼叫阻塞 async 事件迴圈，建議改 run_in_executor"
+  ]
+}
