@@ -64,6 +64,128 @@ async def get_logo_url(ticker: str) -> str | None:
     return None
 
 
+# ── DB 同步操作：在 async endpoint 內以 asyncio.to_thread 呼叫，避免阻塞 event loop ──
+
+_UPSERT_STOCK_SQL = """
+    INSERT INTO stock_prices (
+        ticker, price, prev_close, price_change, price_change_percent,
+        company_name, logo_url, market_state, extended_price,
+        extended_type, extended_change, extended_change_percent,
+        last_updated
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+    ON CONFLICT (ticker) DO UPDATE SET
+        price = EXCLUDED.price,
+        prev_close = EXCLUDED.prev_close,
+        price_change = EXCLUDED.price_change,
+        price_change_percent = EXCLUDED.price_change_percent,
+        company_name = EXCLUDED.company_name,
+        logo_url = EXCLUDED.logo_url,
+        market_state = EXCLUDED.market_state,
+        extended_price = EXCLUDED.extended_price,
+        extended_type = EXCLUDED.extended_type,
+        extended_change = EXCLUDED.extended_change,
+        extended_change_percent = EXCLUDED.extended_change_percent,
+        last_updated = NOW();
+"""
+
+_WATCHLIST_SQL = """
+    SELECT
+        ws.ticker,
+        ws.display_order,
+        COALESCE(sp.price, 0) as price,
+        COALESCE(sp.prev_close, 0) as prev_close,
+        COALESCE(sp.price_change, 0) as price_change,
+        COALESCE(sp.price_change_percent, 0) as price_change_percent,
+        COALESCE(sp.market_state, '') as market_state,
+        COALESCE(sp.extended_price, 0) as extended_price,
+        COALESCE(sp.extended_type, '') as extended_type,
+        COALESCE(sp.extended_change, 0) as extended_change,
+        COALESCE(sp.extended_change_percent, 0) as extended_change_percent
+    FROM watchlist_stocks ws
+    LEFT JOIN stock_prices sp ON ws.ticker = sp.ticker
+    WHERE ws.user_email = %s
+    ORDER BY ws.display_order;
+"""
+
+
+def _db_upsert_stock_price(data: dict) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(_UPSERT_STOCK_SQL, (
+            data['ticker'], data['price'], data['prev_close'],
+            data['price_change'], data['price_change_percent'],
+            data.get('company_name', ''), data.get('logo_url'),
+            data.get('market_state', ''), data.get('extended_price'),
+            data.get('extended_type'), data.get('extended_change'),
+            data.get('extended_change_percent'),
+        ))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_fetch_watchlist(user_email: str) -> list:
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(_WATCHLIST_SQL, (user_email,))
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_add_watchlist(user_email: str, ticker: str) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT COALESCE(MAX(display_order), 0) as max_order FROM watchlist_stocks WHERE user_email = %s",
+            (user_email,),
+        )
+        max_order = cur.fetchone()['max_order']
+        cur.execute(
+            """INSERT INTO watchlist_stocks (user_email, ticker, display_order, created_at, updated_at)
+               VALUES (%s, %s, %s, NOW(), NOW())""",
+            (user_email, ticker, max_order + 1),
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_remove_watchlist(user_email: str, ticker: str) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM watchlist_stocks WHERE user_email = %s AND ticker = %s",
+            (user_email, ticker),
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_reorder_watchlist(user_email: str, tickers: list) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        for index, ticker in enumerate(tickers):
+            cur.execute(
+                "UPDATE watchlist_stocks SET display_order = %s, updated_at = NOW() WHERE user_email = %s AND ticker = %s",
+                (index, user_email, ticker),
+            )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stockprice/{ticker}")
 async def get_stock_price(ticker: str):
     try:
@@ -205,57 +327,10 @@ async def get_stock_price(ticker: str):
         # 如果需要更新資料庫
         if should_update_db:
             try:
-                conn = get_db_connection()
-                cur = conn.cursor()
-
-                sql = """
-                    INSERT INTO stock_prices (
-                        ticker, price, prev_close, price_change, price_change_percent,
-                        company_name, logo_url, market_state, extended_price,
-                        extended_type, extended_change, extended_change_percent,
-                        last_updated
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
-                    )
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        price = EXCLUDED.price,
-                        prev_close = EXCLUDED.prev_close,
-                        price_change = EXCLUDED.price_change,
-                        price_change_percent = EXCLUDED.price_change_percent,
-                        company_name = EXCLUDED.company_name,
-                        logo_url = EXCLUDED.logo_url,
-                        market_state = EXCLUDED.market_state,
-                        extended_price = EXCLUDED.extended_price,
-                        extended_type = EXCLUDED.extended_type,
-                        extended_change = EXCLUDED.extended_change,
-                        extended_change_percent = EXCLUDED.extended_change_percent,
-                        last_updated = NOW();
-                """
-
-                cur.execute(sql, (
-                    response_data['ticker'],
-                    response_data['price'],
-                    response_data['prev_close'],
-                    response_data['price_change'],
-                    response_data['price_change_percent'],
-                    response_data.get('company_name', ''),
-                    response_data.get('logo_url'),
-                    response_data.get('market_state', ''),
-                    response_data.get('extended_price'),
-                    response_data.get('extended_type'),
-                    response_data.get('extended_change'),
-                    response_data.get('extended_change_percent')
-                ))
-
-                conn.commit()
+                await asyncio.to_thread(_db_upsert_stock_price, response_data)
                 last_upsert_times[ticker] = current_time
             except Exception as db_error:
                 print(f"資料庫更新錯誤: {str(db_error)}")
-            finally:
-                if 'cur' in locals():
-                    cur.close()
-                if 'conn' in locals():
-                    conn.close()
 
         return response_data
     except Exception as e:
@@ -345,41 +420,10 @@ async def get_stock(ticker: str):
 @router.get("/watchlist/{user_email}")
 async def get_watchlist(user_email: str):
     try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # 獲取用戶的自選股列表
-        sql = """
-            SELECT 
-                ws.ticker,
-                ws.display_order,
-                COALESCE(sp.price, 0) as price,
-                COALESCE(sp.prev_close, 0) as prev_close,
-                COALESCE(sp.price_change, 0) as price_change,
-                COALESCE(sp.price_change_percent, 0) as price_change_percent,
-                COALESCE(sp.market_state, '') as market_state,
-                COALESCE(sp.extended_price, 0) as extended_price,
-                COALESCE(sp.extended_type, '') as extended_type,
-                COALESCE(sp.extended_change, 0) as extended_change,
-                COALESCE(sp.extended_change_percent, 0) as extended_change_percent
-            FROM watchlist_stocks ws
-            LEFT JOIN stock_prices sp ON ws.ticker = sp.ticker
-            WHERE ws.user_email = %s
-            ORDER BY ws.display_order;
-        """
-        
-        cur.execute(sql, (user_email,))
-        stocks = cur.fetchall()
-        
-        return [dict(stock) for stock in stocks]
+        return await asyncio.to_thread(_db_fetch_watchlist, user_email)
     except Exception as e:
         print(f"獲取自選股列表時發生錯誤: {str(e)}")
         return []
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
 
 @router.get("/autocomplete/{query}")
 async def autocomplete(query: str):
@@ -427,62 +471,18 @@ async def autocomplete(query: str):
 @router.post("/watchlist/add")
 async def add_to_watchlist(ticker: str, user_email: str):
     try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-            
-        # 獲取目前最大的 display_order
-        cur.execute("""
-            SELECT COALESCE(MAX(display_order), 0) as max_order 
-            FROM watchlist_stocks 
-            WHERE user_email = %s
-        """, (user_email,))
-        max_order = cur.fetchone()['max_order']
-        
-        # 新增股票到 watchlist
-        cur.execute("""
-            INSERT INTO watchlist_stocks (
-                user_email, 
-                ticker, 
-                display_order,
-                created_at,
-                updated_at
-            )
-            VALUES (%s, %s, %s, NOW(), NOW())
-        """, (user_email, ticker, max_order + 1))
-        
-        conn.commit()
+        await asyncio.to_thread(_db_add_watchlist, user_email, ticker)
         return {"message": "成功新增股票到追蹤清單", "ticker": ticker}
-        
     except Exception as e:
         return {"error": str(e)}
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
 
 @router.delete("/watchlist/{user_email}/{ticker}")
 async def remove_from_watchlist(user_email: str, ticker: str):
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # 從 watchlist 中移除股票
-        cur.execute("""
-            DELETE FROM watchlist_stocks 
-            WHERE user_email = %s AND ticker = %s
-        """, (user_email, ticker))
-        
-        conn.commit()
+        await asyncio.to_thread(_db_remove_watchlist, user_email, ticker)
         return {"message": "成功從追蹤清單移除股票", "ticker": ticker}
-        
     except Exception as e:
         return {"error": str(e)}
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
 
 class ReorderRequest(BaseModel):
     user_email: str
@@ -491,25 +491,7 @@ class ReorderRequest(BaseModel):
 @router.post("/watchlist/reorder")
 async def reorder_watchlist(request: ReorderRequest):
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # 更新每個股票的顯示順序
-        for index, ticker in enumerate(request.tickers):
-            cur.execute("""
-                UPDATE watchlist_stocks 
-                SET display_order = %s,
-                    updated_at = NOW()
-                WHERE user_email = %s AND ticker = %s
-            """, (index, request.user_email, ticker))
-        
-        conn.commit()
+        await asyncio.to_thread(_db_reorder_watchlist, request.user_email, request.tickers)
         return {"message": "成功更新股票順序"}
-        
     except Exception as e:
         return {"error": str(e)}
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
