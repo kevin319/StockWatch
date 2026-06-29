@@ -1,10 +1,12 @@
 import aiohttp
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # 快取公司名稱和 logo（很少變動，節省 API 呼叫）
 _company_cache = {}
 
-_ET = timezone(timedelta(hours=-4))
+# 使用 IANA 時區，自動處理夏令/冬令（原本寫死 -4 會在冬令時錯 1 小時）
+_ET = ZoneInfo("America/New_York")
 
 def _us_market_state() -> str:
     """根據美東時間判斷美股市場狀態。"""
