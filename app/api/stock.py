@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+import asyncio
 import yfinance as yf
 import yahooquery as yq
 from app.models.db import get_db_connection
@@ -23,14 +24,14 @@ yahoo_cache = {}
 sparkline_cache = {}
 
 
-def _supplement_us_extended(ticker: str, data: dict) -> None:
+async def _supplement_us_extended(ticker: str, data: dict) -> None:
     """美股經 Finnhub 取得時補上盤前/盤後價（Finnhub 免費版無此資料）。
 
     直接修改傳入的 data。yfinance 在完全收盤時仍保留 postMarketPrice，
     會沿用至下次開盤，故不需另做持久化。失敗時靜默略過。
     """
     try:
-        info = yf.Ticker(ticker).info or {}
+        info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info) or {}
         state = data.get('market_state', '')
         if state == 'PRE':
             pre = info.get('preMarketPrice')
@@ -110,13 +111,12 @@ async def get_stock_price(ticker: str):
                 and '.' not in ticker
                 and response_data.get('market_state') not in ('REGULAR', '')
                 and not response_data.get('extended_price')):
-            _supplement_us_extended(ticker, response_data)
+            await _supplement_us_extended(ticker, response_data)
 
         # 如果 provider 未取得資料，fallback 到 yfinance
         if response_data is None:
             print(f"使用 yfinance 取得報價: {ticker}")
-            stock = yf.Ticker(ticker)
-            info = stock.info
+            info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
 
             if info:
                 current_price = info.get('regularMarketPrice', 0)
@@ -274,7 +274,7 @@ async def get_sparkline(ticker: str):
             if now - ts < timedelta(minutes=30):
                 return cached
 
-        hist = yf.Ticker(ticker).history(period="1mo", interval="1d")
+        hist = await asyncio.to_thread(lambda: yf.Ticker(ticker).history(period="1mo", interval="1d"))
         closes = [round(float(c), 4) for c in hist["Close"].dropna().tolist()][-30:]
         data = {"ticker": ticker, "points": closes}
         sparkline_cache[ticker] = (now, data)
@@ -287,9 +287,8 @@ async def get_sparkline(ticker: str):
 @router.get("/stock/{ticker}")
 async def get_stock(ticker: str):
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        
+        info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
+
         if info:
             current_price = info.get('regularMarketPrice', 0)
             prev_close = info.get('previousClose', 0)
@@ -386,7 +385,7 @@ async def get_watchlist(user_email: str):
 async def autocomplete(query: str):
     try:
         # 使用 yahooquery 搜尋股票
-        search = yq.search(query)
+        search = await asyncio.to_thread(yq.search, query)
         
         # 檢查是否有搜尋結果
         if not search or 'quotes' not in search:
