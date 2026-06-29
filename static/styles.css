@@ -241,6 +241,12 @@ img { display: block; max-width: 100%; }
 .v2-row:active { transform: scale(0.985); }
 .v2-row + .v2-row { border-top: 0.5px solid var(--hairline); }
 
+/* 價格更新時的微閃爍（紅漲綠跌） */
+@keyframes flashUp   { from { background: rgba(255,59,48,0.12); } to { background: transparent; } }
+@keyframes flashDown { from { background: rgba(52,199,89,0.12); } to { background: transparent; } }
+.v2-row.flash-up   { animation: flashUp 0.8s ease-out; }
+.v2-row.flash-down { animation: flashDown 0.8s ease-out; }
+
 .v2-tile {
   width: 40px; height: 40px;
   border-radius: 50%;
