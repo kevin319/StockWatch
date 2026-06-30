@@ -23,6 +23,9 @@ yahoo_cache = {}
 # sparkline 走勢快取（變動慢，快取較久）
 sparkline_cache = {}
 
+# 基本面快取（變動更慢）
+fundamentals_cache = {}
+
 
 async def _supplement_us_extended(ticker: str, data: dict) -> None:
     """美股經 Finnhub 取得時補上盤前/盤後價（Finnhub 免費版無此資料）。
@@ -36,12 +39,13 @@ async def _supplement_us_extended(ticker: str, data: dict) -> None:
         if state == 'PRE':
             pre = info.get('preMarketPrice')
             if pre and isinstance(pre, (int, float)) and pre > 0:
-                prev_close = data.get('prev_close') or info.get('previousClose') or 0
+                # 盤前漲跌應對「上一個正規收盤價」(price)，而非更前一日的 prev_close
+                base = data.get('price') or info.get('regularMarketPrice') or 0
                 data['extended_price'] = float(pre)
                 data['extended_type'] = 'PRE_MARKET'
-                if prev_close:
-                    data['extended_change'] = float(pre) - prev_close
-                    data['extended_change_percent'] = (data['extended_change'] / prev_close) * 100
+                if base:
+                    data['extended_change'] = float(pre) - base
+                    data['extended_change_percent'] = (data['extended_change'] / base) * 100
         else:  # POST / POSTPOST / CLOSED
             post = info.get('postMarketPrice')
             if post and isinstance(post, (int, float)) and post > 0:
@@ -199,7 +203,7 @@ async def get_stock_price(ticker: str):
             if last_state == 'REGULAR':
                 cache_ttl = timedelta(seconds=8)  # <10s，讓前端 10 秒輪詢每次都拿到新價
             elif last_state in ('PRE', 'POST'):
-                cache_ttl = timedelta(seconds=60)
+                cache_ttl = timedelta(seconds=12)  # <15s，配合前端盤前/盤後 15 秒輪詢
             else:
                 cache_ttl = timedelta(minutes=5)
             if time_diff < cache_ttl:
@@ -265,14 +269,14 @@ async def get_stock_price(ticker: str):
                 extended_change = None
                 extended_change_percent = None
 
-                # 處理盤前交易
+                # 處理盤前交易（漲跌對上一個正規收盤價 current_price，非更前一日 prev_close）
                 if market_state == 'PRE':
                     if 'preMarketPrice' in info and info['preMarketPrice']:
                         extended_price = float(info['preMarketPrice'])
                         extended_type = 'PRE_MARKET'
-                        if prev_close and extended_price:
-                            extended_change = extended_price - prev_close
-                            extended_change_percent = (extended_change / prev_close) * 100
+                        if current_price and extended_price:
+                            extended_change = extended_price - current_price
+                            extended_change_percent = (extended_change / current_price) * 100
 
                 # 處理盤後交易（包括已收盤狀態）
                 elif market_state in ['POST', 'POSTPOST', 'CLOSED']:
@@ -339,6 +343,18 @@ async def get_stock_price(ticker: str):
             'ticker': ticker
         }
 
+def _yf_ticker(ticker: str) -> str:
+    """正規化代號供 yfinance 使用：港股需 4 位數代碼（去多餘前導零、補滿 4 位）。
+    例：01810.HK -> 1810.HK、00700.HK -> 0700.HK。其他市場原樣回傳。"""
+    if ticker.upper().endswith(".HK"):
+        code = ticker[:-3]
+        try:
+            return str(int(code)).zfill(4) + ".HK"
+        except ValueError:
+            return ticker
+    return ticker
+
+
 @router.get("/sparkline/{ticker}")
 async def get_sparkline(ticker: str):
     """回傳近一個月日收盤序列，供前端畫迷你走勢圖。全市場通用，快取 30 分鐘。"""
@@ -349,14 +365,44 @@ async def get_sparkline(ticker: str):
             if now - ts < timedelta(minutes=30):
                 return cached
 
-        hist = await asyncio.to_thread(lambda: yf.Ticker(ticker).history(period="1mo", interval="1d"))
+        hist = await asyncio.to_thread(lambda: yf.Ticker(_yf_ticker(ticker)).history(period="1mo", interval="1d"))
         closes = [round(float(c), 4) for c in hist["Close"].dropna().tolist()][-30:]
         data = {"ticker": ticker, "points": closes}
-        sparkline_cache[ticker] = (now, data)
+        if closes:  # 只快取成功結果；空的（多半是併發被限流）不快取以便重試
+            sparkline_cache[ticker] = (now, data)
         return data
     except Exception as e:
         print(f"sparkline 取得失敗: {ticker} {e}")
         return {"ticker": ticker, "points": []}
+
+
+@router.get("/fundamentals/{ticker}")
+async def get_fundamentals(ticker: str):
+    """回傳基本面指標供股票列展開時顯示。全市場通用，快取 6 小時。缺值回 null。"""
+    try:
+        now = datetime.now()
+        if ticker in fundamentals_cache:
+            ts, cached = fundamentals_cache[ticker]
+            if now - ts < timedelta(hours=6):
+                return cached
+
+        info = await asyncio.to_thread(lambda: yf.Ticker(_yf_ticker(ticker)).info) or {}
+        data = {
+            "ticker": ticker,
+            "pe": info.get("trailingPE"),
+            "pb": info.get("priceToBook"),
+            "ps": info.get("priceToSalesTrailing12Months"),
+            "eps": info.get("trailingEps"),
+            "dividend": info.get("dividendRate"),
+            "divYield": info.get("dividendYield"),
+            "week52High": info.get("fiftyTwoWeekHigh"),
+            "week52Low": info.get("fiftyTwoWeekLow"),
+        }
+        fundamentals_cache[ticker] = (now, data)
+        return data
+    except Exception as e:
+        print(f"基本面取得失敗: {ticker} {e}")
+        return {"ticker": ticker, "error": str(e)}
 
 
 @router.get("/stock/{ticker}")
@@ -377,13 +423,13 @@ async def get_stock(ticker: str):
             extended_change = None
             extended_change_percent = None
             
-            # 盤前交易
+            # 盤前交易（漲跌對上一個正規收盤價 current_price）
             if market_state == 'PRE' and 'preMarketPrice' in info:
                 extended_price = float(info['preMarketPrice'])
                 extended_type = 'PRE_MARKET'
-                if prev_close:
-                    extended_change = extended_price - prev_close
-                    extended_change_percent = (extended_change / prev_close) * 100
+                if current_price:
+                    extended_change = extended_price - current_price
+                    extended_change_percent = (extended_change / current_price) * 100
             
             # 盤後交易（包括 CLOSED 狀態）
             elif (market_state in ['POST', 'POSTPOST', 'CLOSED']) and 'postMarketPrice' in info:
