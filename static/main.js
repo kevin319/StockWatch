@@ -1,7 +1,7 @@
 /* ═══════ THEME ═══════ */
 
 function loadTheme() {
-    var saved = localStorage.getItem('sw-theme') || 'light';
+    var saved = localStorage.getItem('sw-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
     updateThemeToggle(saved);
 }
@@ -68,6 +68,9 @@ let currentTouchItem = null;
 let sparkData = {}; // ticker -> 近期收盤序列
 let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向（供微閃爍）
 let firstStockRender = true; // 首次渲染真實資料時做淡入
+let expandedTicker = null;    // 目前展開基本面的代號（一次一個）
+let fundData = {};            // ticker -> 基本面資料 / 'loading'
+let expandAnimate = false;    // 一次性：本次重繪是否播放展開動畫
 
 function initStockData() {
     stocks = [
@@ -91,7 +94,7 @@ function toggleSettingsPage() {
     if (!el) return;
     el.classList.toggle('hidden');
     if (!el.classList.contains('hidden')) {
-        updateThemeToggle(localStorage.getItem('sw-theme') || 'light');
+        updateThemeToggle(localStorage.getItem('sw-theme') || 'dark');
         renderSettingsStockList();
     }
 }
@@ -115,16 +118,6 @@ function getMarketDotClass(state) {
     if (state === 'PRE') return 'market-dot-pre';
     return 'market-dot-close';
 }
-
-// 依代號後綴決定幣別符號（避免台/港/陸股都標成美金 $）
-function currencySymbol(ticker) {
-    const t = (ticker || '').toUpperCase();
-    if (t.endsWith('.TW') || t.endsWith('.TWO')) return 'NT$';
-    if (t.endsWith('.HK')) return 'HK$';
-    if (t.endsWith('.SS') || t.endsWith('.SZ')) return '¥';
-    return '$'; // 美股
-}
-
 
 /* ═══════ MARKET CLOCK ═══════ */
 
@@ -287,11 +280,14 @@ function renderStocks() {
         const extArrow = extUp ? '+' : '';
         const extLabel = stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後';
         const dotClass = getMarketDotClass(stock.market_state);
-        const cur = currencySymbol(stock.ticker);
+
+        const item = document.createElement('div');
+        item.className = 'stock-item';
 
         const row = document.createElement('div');
         const flashDir = priceFlash[stock.ticker];
-        row.className = 'v2-row' + (flashDir ? ' flash-' + flashDir : '') + (firstStockRender ? ' row-enter' : '');
+        const isExpanded = expandedTicker === stock.ticker;
+        row.className = 'v2-row' + (flashDir ? ' flash-' + flashDir : '') + (firstStockRender ? ' row-enter' : '') + (isExpanded ? ' expanded' : '');
         if (firstStockRender) row.style.animationDelay = (index * 40) + 'ms';
         row.innerHTML = `
             ${tileHtml(stock)}
@@ -303,37 +299,121 @@ function renderStocks() {
             </div>
             <div class="row-spark">${sparklineSvg(sparkData[stock.ticker])}</div>
             <div class="row-price">
-                <span class="price-main">${cur}${stock.price.toFixed(2)}</span>
+                <span class="price-main">${stock.price.toFixed(2)}</span>
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
                 ${hasExtended ? `
                 <span class="price-extended">
-                    ${extLabel} ${cur}${stock.extended_price.toFixed(2)}
+                    ${extLabel} ${stock.extended_price.toFixed(2)}
                     <span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>
                 </span>` : ''}
             </div>`;
-        stockList.appendChild(row);
+        row.addEventListener('click', () => toggleExpand(stock.ticker));
+        item.appendChild(row);
+
+        if (isExpanded) {
+            const detail = document.createElement('div');
+            detail.className = 'stock-detail' + (expandAnimate ? ' detail-enter' : '');
+            detail.innerHTML = detailHtml(stock.ticker);
+            item.appendChild(detail);
+        }
+
+        stockList.appendChild(item);
     });
 
     firstStockRender = false;
+    expandAnimate = false; // 展開動畫只播一次
     priceFlash = {}; // 閃爍只觸發一次
     updateHeroCaption();
     updateLastUpdateTime();
 }
 
-// 載入各股票走勢序列（變動慢，每檔抓一次即可），完成後重繪
-async function loadSparklines() {
-    const targets = stocks.filter(s => !(s.ticker in sparkData));
-    if (!targets.length) return;
-    await Promise.all(targets.map(async (s) => {
-        try {
-            const res = await fetch('/sparkline/' + s.ticker);
-            const data = await res.json();
-            sparkData[s.ticker] = Array.isArray(data.points) ? data.points : [];
-        } catch {
-            sparkData[s.ticker] = [];
-        }
-    }));
+// 點擊股票列：展開/收合基本面（手風琴，一次一個）
+function toggleExpand(ticker) {
+    if (expandedTicker === ticker) {
+        collapseDetail(); // 收合：先播放滑出動畫，結束後才移除
+        return;
+    }
+    expandedTicker = ticker;
+    expandAnimate = true;
+    if (!(ticker in fundData)) loadFundamentals(ticker);
     renderStocks();
+}
+
+function collapseDetail() {
+    const detail = document.querySelector('.stock-detail');
+    if (!detail) { expandedTicker = null; renderStocks(); return; }
+    const row = detail.closest('.stock-item').querySelector('.v2-row');
+    if (row) row.classList.remove('expanded');
+    detail.classList.remove('detail-enter');
+    detail.classList.add('detail-exit');
+    detail.addEventListener('animationend', () => {
+        expandedTicker = null;
+        renderStocks();
+    }, { once: true });
+}
+
+async function loadFundamentals(ticker) {
+    fundData[ticker] = 'loading';
+    try {
+        const res = await fetch('/fundamentals/' + ticker);
+        fundData[ticker] = await res.json();
+    } catch {
+        fundData[ticker] = { error: true };
+    }
+    // 只換面板內容、不重建元素，避免打斷展開動畫
+    if (expandedTicker === ticker) {
+        const detail = document.querySelector('.stock-detail');
+        if (detail) detail.innerHTML = detailHtml(ticker);
+        else renderStocks();
+    }
+}
+
+// 基本面面板 HTML（2 欄 × 4 列指標格）
+function detailHtml(ticker) {
+    const d = fundData[ticker];
+    if (!d || d === 'loading') {
+        const sk = '<div class="metric"><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:42%;margin-top:6px"></div></div>';
+        return `<div class="detail-grid">${sk.repeat(8)}</div>`;
+    }
+    if (d.error) return `<div class="detail-empty">無法取得基本面資料</div>`;
+
+    const ratio = v => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(2);
+    const money = v => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(2);
+    const moneyNZ = v => (v == null || isNaN(v) || v === 0) ? '—' : Number(v).toFixed(2);
+    const pct = v => (v == null || isNaN(v) || v === 0) ? '—' : Number(v).toFixed(2) + '%';
+
+    const cells = [
+        ['P/E', ratio(d.pe)],   ['Dividend', moneyNZ(d.dividend)],
+        ['P/B', ratio(d.pb)],   ['Div Yield', pct(d.divYield)],
+        ['P/S', ratio(d.ps)],   ['52W High', money(d.week52High)],
+        ['EPS', money(d.eps)],  ['52W Low', money(d.week52Low)],
+    ];
+    return `<div class="detail-grid">${cells.map(([k, v]) =>
+        `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`;
+}
+
+// 載入各股票走勢序列。只補「尚未成功取得」的；限制併發避免 yfinance 被限流；
+// 只存有資料的結果，空的（失敗）留待下次輪詢重試。
+async function loadSparklines() {
+    const targets = stocks.filter(s => !sparkData[s.ticker] || !sparkData[s.ticker].length);
+    if (!targets.length) return;
+
+    const CONCURRENCY = 3;
+    let changed = false;
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+        const batch = targets.slice(i, i + CONCURRENCY);
+        await Promise.all(batch.map(async (s) => {
+            try {
+                const res = await fetch('/sparkline/' + s.ticker);
+                const data = await res.json();
+                if (Array.isArray(data.points) && data.points.length) {
+                    sparkData[s.ticker] = data.points;
+                    changed = true;
+                }
+            } catch {}
+        }));
+    }
+    if (changed) renderStocks();
 }
 
 function updateHeroCaption() {
@@ -392,7 +472,7 @@ function renderSettingsStockList() {
 
 async function removeStock(ticker) {
     try {
-        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
         const response = await fetch('/watchlist/' + userInfo.email + '/' + ticker, { method: 'DELETE' });
@@ -415,7 +495,7 @@ async function addToWatchlist(ticker) {
             throw new Error('此股票已在清單中');
         }
 
-        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
         const response = await fetch('/watchlist/add?ticker=' + ticker + '&user_email=' + userInfo.email, { method: 'POST' });
@@ -615,7 +695,7 @@ function handleMouseDown(e) {
 
 async function updateStockOrder() {
     try {
-        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) return;
 
         await fetch('/watchlist/reorder', {
@@ -648,7 +728,7 @@ function getPollingInterval() {
     if (!stocks || !stocks.length) return 10000;
     const states = stocks.map(s => s.market_state || '');
     if (states.some(s => s === 'REGULAR')) return 10000;
-    if (states.some(s => s === 'PRE' || s === 'POST')) return 60000;
+    if (states.some(s => s === 'PRE' || s === 'POST')) return 15000;
     return 300000;
 }
 
@@ -696,6 +776,7 @@ async function updateStockPrices() {
         stocks = updated;
         renderStocks();
         updateLastUpdateTime();
+        loadSparklines(); // 補抓上次失敗（空）的走勢圖
     } catch (error) {
         console.error('更新股票價格時發生錯誤:', error);
     }
@@ -719,7 +800,7 @@ function updateLastUpdateTime() {
 async function initializeStocks() {
     renderSkeleton(); // 資料抵達前先顯示骨架
     try {
-        const userInfo = JSON.parse(sessionStorage.getItem('user_info'));
+        const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
         const response = await fetch('/watchlist/' + userInfo.email);

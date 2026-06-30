@@ -238,8 +238,31 @@ img { display: block; max-width: 100%; }
   -webkit-tap-highlight-color: transparent;
 }
 
+.v2-row { cursor: pointer; }
 .v2-row:active { transform: scale(0.985); }
-.v2-row + .v2-row { border-top: 0.5px solid var(--hairline); }
+.stock-item + .stock-item { border-top: 0.5px solid var(--hairline); }
+.v2-row.expanded { background: var(--well); }
+
+/* 展開的基本面面板（max-height 滑動，展開/收合皆絲滑） */
+.stock-detail {
+  background: var(--well);
+  overflow: hidden;
+}
+.detail-enter { animation: detailEnter 0.30s ease both; }
+.detail-exit  { animation: detailExit 0.26s ease both; }
+@keyframes detailEnter { from { max-height: 0; opacity: 0; } to { max-height: 300px; opacity: 1; } }
+@keyframes detailExit  { from { max-height: 300px; opacity: 1; } to { max-height: 0; opacity: 0; } }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+  padding: 12px 20px 16px;
+}
+.metric { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.metric-label { font: 500 11px/1 var(--font); color: var(--text-tertiary); letter-spacing: 0.02em; }
+.metric-value { font: 600 15px/1.1 var(--font); color: var(--text); font-variant-numeric: tabular-nums; }
+.detail-empty { padding: 14px 20px; text-align: center; color: var(--text-tertiary); font: 400 13px var(--font); }
 
 /* 價格更新時的微閃爍（紅漲綠跌） */
 @keyframes flashUp   { from { background: rgba(255,59,48,0.12); } to { background: transparent; } }
