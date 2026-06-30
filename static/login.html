@@ -6,7 +6,7 @@
     <title>My Stock</title>
     <link href="/static/styles.css" rel="stylesheet">
     <script>
-        (function(){var t=localStorage.getItem('sw-theme')||'light';document.documentElement.setAttribute('data-theme',t)})();
+        (function(){var t=localStorage.getItem('sw-theme')||'dark';document.documentElement.setAttribute('data-theme',t)})();
     </script>
     <script src="https://accounts.google.com/gsi/client" async></script>
 </head>
@@ -54,9 +54,10 @@
                 return r.json();
             })
             .then(data => {
-                if (data.valid) {
-                    sessionStorage.setItem('google_token', token);
-                    sessionStorage.setItem('user_info', JSON.stringify({
+                if (data.valid && data.access_token) {
+                    // 存本站長效 JWT 到 localStorage（關瀏覽器也在，登入一次管很久）
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('user_info', JSON.stringify({
                         email: data.email,
                         name: data.name,
                         picture: data.picture
