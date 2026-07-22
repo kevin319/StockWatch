@@ -70,7 +70,9 @@ let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向�
 let firstStockRender = true; // 首次渲染真實資料時做淡入
 let expandedTicker = null;    // 目前展開基本面的代號（一次一個）
 let fundData = {};            // ticker -> 基本面資料 / 'loading'
+let summaryData = {};         // ticker -> AI 摘要文字 / 'loading'
 let expandAnimate = false;    // 一次性：本次重繪是否播放展開動畫
+let chatContext = null;       // 從股票開啟聊天時的脈絡 {ticker, summary}；一般聊天為 null
 
 function initStockData() {
     stocks = [
@@ -86,7 +88,14 @@ function initStockData() {
 
 function toggleChatWindow() {
     const el = document.getElementById('chatWindow');
+    const opening = el.classList.contains('hidden');
     el.classList.toggle('hidden');
+    // 從一般聊天按鈕開啟：清除股票脈絡，標題回「AI 助理」
+    if (opening) {
+        chatContext = null;
+        const titleEl = el.querySelector('.sheet-title');
+        if (titleEl) titleEl.textContent = 'AI 助理';
+    }
 }
 
 function toggleSettingsPage() {
@@ -336,6 +345,7 @@ function toggleExpand(ticker) {
     expandedTicker = ticker;
     expandAnimate = true;
     if (!(ticker in fundData)) loadFundamentals(ticker);
+    if (!(ticker in summaryData)) loadSummary(ticker);
     renderStocks();
 }
 
@@ -368,8 +378,31 @@ async function loadFundamentals(ticker) {
     }
 }
 
-// 基本面面板 HTML（2 欄 × 4 列指標格）
+// AI 摘要懶載入：抓 /ai-summary/{ticker}，失敗存空字串。
+// 完成後只就地更新目前展開的 .stock-detail（沿用 loadFundamentals 手法）。
+async function loadSummary(ticker) {
+    summaryData[ticker] = 'loading';
+    try {
+        const res = await fetch('/ai-summary/' + ticker);
+        const data = await res.json();
+        summaryData[ticker] = data.summary || '';
+    } catch {
+        summaryData[ticker] = '';
+    }
+    if (expandedTicker === ticker) {
+        const detail = document.querySelector('.stock-detail');
+        if (detail) detail.innerHTML = detailHtml(ticker);
+        else renderStocks();
+    }
+}
+
+// 展開面板 HTML：基本面 grid + AI 摘要區
 function detailHtml(ticker) {
+    return fundamentalsHtml(ticker) + summaryHtml(ticker);
+}
+
+// 基本面面板 HTML（2 欄 × 4 列指標格）
+function fundamentalsHtml(ticker) {
     const d = fundData[ticker];
     if (!d || d === 'loading') {
         const sk = '<div class="metric"><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:42%;margin-top:6px"></div></div>';
@@ -390,6 +423,49 @@ function detailHtml(ticker) {
     ];
     return `<div class="detail-grid">${cells.map(([k, v]) =>
         `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`;
+}
+
+// AI 摘要區 HTML：標題列（含 💬 對話按鈕）+ 摘要文字 + 免責
+function summaryHtml(ticker) {
+    const s = summaryData[ticker];
+    let body;
+    if (s === 'loading' || s === undefined) {
+        body = `<div class="summary-skeleton">
+            <div class="sk sk-line" style="width:92%"></div>
+            <div class="sk sk-line" style="width:100%;margin-top:8px"></div>
+            <div class="sk sk-line" style="width:78%;margin-top:8px"></div>
+        </div>`;
+    } else if (!s) {
+        body = `<div class="summary-text summary-empty">目前沒有可用的摘要</div>`;
+    } else {
+        body = `<div class="summary-text">${escapeHtml(s)}</div>`;
+    }
+    return `<div class="summary-section">
+        <div class="summary-head">
+            <span class="summary-title">AI 摘要</span>
+            <button class="summary-chat-btn" aria-label="討論這檔股票"
+                    onclick="event.stopPropagation(); openStockChat('${ticker}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </button>
+        </div>
+        ${body}
+        <div class="summary-disclaimer">AI 生成，僅供參考</div>
+    </div>`;
+}
+
+// 從股票面板開啟聊天：帶入脈絡並切換到聊天視窗
+function openStockChat(ticker) {
+    const summary = (summaryData[ticker] && summaryData[ticker] !== 'loading') ? summaryData[ticker] : '';
+    chatContext = { ticker, summary };
+
+    const titleEl = document.querySelector('#chatWindow .sheet-title');
+    if (titleEl) titleEl.textContent = '討論 ' + ticker;
+
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) chatMessages.innerHTML = '';
+
+    const chatWindow = document.getElementById('chatWindow');
+    if (chatWindow) chatWindow.classList.remove('hidden');
 }
 
 // 載入各股票走勢序列。只補「尚未成功取得」的；限制併發避免 yfinance 被限流；
@@ -906,7 +982,11 @@ async function sendMessage() {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({
+                message,
+                ticker: chatContext ? chatContext.ticker : null,
+                context: chatContext ? chatContext.summary : null
+            })
         });
 
         const data = await response.json();

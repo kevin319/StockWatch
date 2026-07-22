@@ -541,3 +541,248 @@ async def reorder_watchlist(request: ReorderRequest):
         return {"message": "成功更新股票順序"}
     except Exception as e:
         return {"error": str(e)}
+
+
+# ── AI 股票摘要 ──────────────────────────────────────────────────────────────
+
+import aiohttp
+
+
+def _db_fetch_summary(ticker: str) -> dict | None:
+    """讀取 stock_summaries 中的快取摘要，回 dict 或 None。"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT ticker, summary, generated_at FROM stock_summaries WHERE ticker = %s",
+            (ticker,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_upsert_summary(ticker: str, summary: str) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO stock_summaries (ticker, summary, generated_at)
+               VALUES (%s, %s, NOW())
+               ON CONFLICT (ticker) DO UPDATE SET
+                   summary = EXCLUDED.summary,
+                   generated_at = NOW();""",
+            (ticker, summary),
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_distinct_watchlist_tickers() -> list:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT DISTINCT ticker FROM watchlist_stocks")
+        return [row[0] for row in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+async def _collect_us_context(ticker: str) -> str:
+    """美股：Finnhub 近 30 天公司新聞 headline + 最新一季財報 EPS。"""
+    parts = []
+    base_url = "https://finnhub.io/api/v1"
+    token = settings.FINNHUB_API_KEY
+    to_date = datetime.now()
+    from_date = to_date - timedelta(days=30)
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 公司新聞
+            try:
+                async with session.get(
+                    f"{base_url}/company-news",
+                    params={
+                        "symbol": ticker,
+                        "from": from_date.strftime("%Y-%m-%d"),
+                        "to": to_date.strftime("%Y-%m-%d"),
+                        "token": token,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    if resp.status == 200:
+                        news = await resp.json()
+                        headlines = [n.get("headline", "") for n in (news or [])[:15] if n.get("headline")]
+                        if headlines:
+                            parts.append("近期新聞標題：\n" + "\n".join(f"- {h}" for h in headlines))
+            except Exception as e:
+                print(f"Finnhub 新聞取得失敗: {ticker} {e}")
+
+            # 財報 EPS
+            try:
+                async with session.get(
+                    f"{base_url}/stock/earnings",
+                    params={"symbol": ticker, "token": token},
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    if resp.status == 200:
+                        earnings = await resp.json()
+                        if earnings:
+                            e = earnings[0]
+                            parts.append(
+                                "最新一季財報（EPS）："
+                                f"實際 {e.get('actual')}、預估 {e.get('estimate')}、"
+                                f"驚奇 {e.get('surprise')}（期別 {e.get('period')}）"
+                            )
+            except Exception as e:
+                print(f"Finnhub 財報取得失敗: {ticker} {e}")
+    except Exception as e:
+        print(f"Finnhub 資料蒐集異常: {ticker} {e}")
+    return "\n\n".join(parts)
+
+
+def _collect_non_us_context_sync(ticker: str) -> str:
+    """非美股：yfinance 新聞 title + 最新季度財務。於 to_thread 內執行（阻塞）。"""
+    parts = []
+    yf_ticker = _yf_ticker(ticker)
+    t = yf.Ticker(yf_ticker)
+
+    # 新聞
+    try:
+        news = t.news or []
+        titles = []
+        for n in news[:10]:
+            # yfinance 新聞結構可能為 {'title': ...} 或 {'content': {'title': ...}}
+            title = n.get("title") or (n.get("content") or {}).get("title")
+            if title:
+                titles.append(title)
+        if titles:
+            parts.append("近期新聞標題：\n" + "\n".join(f"- {x}" for x in titles))
+    except Exception as e:
+        print(f"yfinance 新聞取得失敗: {ticker} {e}")
+
+    # 財務：最新季度營收/淨利，退而求其次用 info 的 EPS
+    try:
+        fin = t.quarterly_financials
+        added = False
+        if fin is not None and not fin.empty:
+            col = fin.columns[0]
+            rev = fin.loc["Total Revenue", col] if "Total Revenue" in fin.index else None
+            ni = fin.loc["Net Income", col] if "Net Income" in fin.index else None
+            bits = []
+            if rev is not None:
+                bits.append(f"營收 {rev}")
+            if ni is not None:
+                bits.append(f"淨利 {ni}")
+            if bits:
+                parts.append(f"最新季度財務（{col})：" + "、".join(bits))
+                added = True
+        if not added:
+            info = t.info or {}
+            eps = info.get("trailingEps")
+            if eps is not None:
+                parts.append(f"EPS（trailing）：{eps}")
+    except Exception as e:
+        print(f"yfinance 財務取得失敗: {ticker} {e}")
+
+    return "\n\n".join(parts)
+
+
+async def _call_deepseek_summary(ticker: str, context_text: str) -> str:
+    """呼叫 DeepSeek 產生 200 字以內繁中摘要。沿用 chat.py 的呼叫方式。"""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+    }
+    system_prompt = (
+        "你是專業的證券分析師。請根據提供的財報與新聞資料，為這支股票產生一段繁體中文摘要，"
+        "聚焦於：財報表現、近期新聞題材、對股價的潛在影響。語氣客觀中立，不做投資建議。"
+        "嚴格限制在 200 字以內，且務必是完整的句子、不可在句子中途結束。"
+    )
+    user_content = f"股票代號：{ticker}\n\n資料：\n{context_text}"
+    data = {
+        "model": settings.DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 600,
+    }
+    url = settings.DEEPSEEK_API_URL.rstrip("/")
+    if not url.endswith("/chat/completions"):
+        url += "/chat/completions"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, headers=headers, json=data,
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as response:
+            result = await response.json(content_type=None)
+            if "choices" in result and len(result["choices"]) > 0:
+                return result["choices"][0]["message"]["content"].strip()
+    return ""
+
+
+async def generate_stock_summary(ticker: str) -> str:
+    """產生單支股票摘要（不含快取判斷）：蒐集資料→呼叫 DeepSeek→upsert。
+    供端點與排程共用。回傳摘要字串；任何階段失敗時回空字串並印 log。"""
+    try:
+        if '.' not in ticker and settings.FINNHUB_API_KEY:
+            context_text = await _collect_us_context(ticker)
+        else:
+            context_text = await asyncio.to_thread(_collect_non_us_context_sync, ticker)
+
+        if not context_text:
+            context_text = "（無可用的新聞與財報資料）"
+
+        summary = await _call_deepseek_summary(ticker, context_text)
+        if summary:
+            try:
+                await asyncio.to_thread(_db_upsert_summary, ticker, summary)
+            except Exception as e:
+                print(f"摘要寫入資料庫失敗: {ticker} {e}")
+        return summary
+    except Exception as e:
+        print(f"產生摘要失敗: {ticker} {e}")
+        return ""
+
+
+@router.get("/ai-summary/{ticker}")
+async def get_ai_summary(ticker: str):
+    """回傳 AI 股票摘要。25 小時內有快取則直接回，否則即時產生。絕不丟 500。"""
+    try:
+        # 先看快取
+        try:
+            cached = await asyncio.to_thread(_db_fetch_summary, ticker)
+        except Exception as e:
+            print(f"讀取摘要快取失敗: {ticker} {e}")
+            cached = None
+
+        if cached and cached.get("summary") and cached.get("generated_at"):
+            gen = cached["generated_at"]
+            now = datetime.now(gen.tzinfo) if gen.tzinfo else datetime.now()
+            if now - gen < timedelta(hours=25):
+                return {
+                    "ticker": ticker,
+                    "summary": cached["summary"],
+                    "generated_at": gen.isoformat(),
+                }
+
+        # 即時產生
+        summary = await generate_stock_summary(ticker)
+        if not summary:
+            return {"ticker": ticker, "summary": "", "error": "無法產生摘要"}
+
+        return {
+            "ticker": ticker,
+            "summary": summary,
+            "generated_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        print(f"ai-summary 端點異常: {ticker} {e}")
+        return {"ticker": ticker, "summary": "", "error": str(e)}

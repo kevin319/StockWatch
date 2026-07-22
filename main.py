@@ -1,10 +1,85 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
-from app.api import auth, stock, chat
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-app = FastAPI()
+from app.api import auth, stock, chat
+from app.models.db import get_db_connection
+
+logger = logging.getLogger(__name__)
+
+
+def _ensure_summary_table() -> None:
+    """建立 stock_summaries 表（idempotent）。同步操作，於 to_thread 內呼叫。"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS stock_summaries (
+                   ticker TEXT PRIMARY KEY,
+                   summary TEXT,
+                   generated_at TIMESTAMPTZ DEFAULT NOW()
+               );"""
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+async def _refresh_all_summaries() -> None:
+    """排程工作：對所有自選股逐支重新產生摘要並 upsert（序列）。"""
+    import asyncio
+    try:
+        tickers = await asyncio.to_thread(stock._db_distinct_watchlist_tickers)
+    except Exception as e:
+        logger.error(f"排程取得自選股清單失敗: {e}")
+        return
+    for ticker in tickers:
+        try:
+            await stock.generate_stock_summary(ticker)
+        except Exception as e:
+            logger.error(f"排程產生摘要失敗: {ticker} {e}")
+
+
+scheduler = AsyncIOScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+    # 建表（失敗不可讓 app 崩潰）
+    try:
+        await asyncio.to_thread(_ensure_summary_table)
+    except Exception as e:
+        logger.error(f"建立 stock_summaries 表失敗: {e}")
+
+    # 啟動排程（失敗不可讓 app 崩潰）
+    try:
+        scheduler.add_job(
+            _refresh_all_summaries,
+            CronTrigger(hour=7, minute=0, timezone="Asia/Taipei"),
+            id="daily_stock_summaries",
+            replace_existing=True,
+        )
+        scheduler.start()
+    except Exception as e:
+        logger.error(f"啟動排程失敗: {e}")
+
+    yield
+
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception as e:
+        logger.error(f"關閉排程失敗: {e}")
+
+
+app = FastAPI(lifespan=lifespan)
 
 # 設定 CORS
 app.add_middleware(

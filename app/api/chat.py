@@ -23,14 +23,26 @@ async def chat(request: ChatRequest):
             "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"
         }
 
+        # 若帶有股票摘要脈絡，改用針對該股票的 system prompt（放寬到約 150 字）
+        if request.context:
+            system_prompt = (
+                f"使用者正在看 {request.ticker or ''}，以下是這支股票的摘要：\n"
+                f"{request.context}\n\n"
+                "請針對這支股票與上述摘要客觀討論。使用繁體中文，回答簡潔，在150個中文字以內。"
+            )
+            max_tokens = 400
+        else:
+            system_prompt = SYSTEM_PROMPT
+            max_tokens = 256
+
         data = {
             "model": settings.DEEPSEEK_MODEL,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": request.message}
             ],
             "temperature": 0.7,
-            "max_tokens": 256
+            "max_tokens": max_tokens
         }
 
         url = settings.DEEPSEEK_API_URL.rstrip("/")

@@ -250,8 +250,8 @@ img { display: block; max-width: 100%; }
 }
 .detail-enter { animation: detailEnter 0.30s ease both; }
 .detail-exit  { animation: detailExit 0.26s ease both; }
-@keyframes detailEnter { from { max-height: 0; opacity: 0; } to { max-height: 300px; opacity: 1; } }
-@keyframes detailExit  { from { max-height: 300px; opacity: 1; } to { max-height: 0; opacity: 0; } }
+@keyframes detailEnter { from { max-height: 0; opacity: 0; } to { max-height: 800px; opacity: 1; } }
+@keyframes detailExit  { from { max-height: 800px; opacity: 1; } to { max-height: 0; opacity: 0; } }
 
 .detail-grid {
   display: grid;
@@ -263,6 +263,25 @@ img { display: block; max-width: 100%; }
 .metric-label { font: 500 11px/1 var(--font); color: var(--text-tertiary); letter-spacing: 0.02em; }
 .metric-value { font: 600 15px/1.1 var(--font); color: var(--text); font-variant-numeric: tabular-nums; }
 .detail-empty { padding: 14px 20px; text-align: center; color: var(--text-tertiary); font: 400 13px var(--font); }
+
+/* AI 摘要區 */
+.summary-section { padding: 12px 20px 16px; border-top: 0.5px solid var(--hairline); }
+.summary-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.summary-title { font: 600 13px/1 var(--font); color: var(--text); letter-spacing: 0.02em; }
+.summary-chat-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 0.5px solid var(--hairline); border-radius: 8px;
+  background: var(--card); color: var(--text-secondary);
+  cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+}
+.summary-chat-btn:hover { color: var(--text); border-color: var(--text-tertiary); }
+.summary-chat-btn:active { transform: scale(0.94); }
+.summary-text { font: 400 13px/1.55 var(--font); color: var(--text-secondary); white-space: pre-wrap; }
+.summary-empty { color: var(--text-tertiary); }
+.summary-skeleton { padding: 2px 0; }
+.summary-disclaimer { margin-top: 10px; font: 400 11px/1 var(--font); color: var(--text-tertiary); }
 
 /* 價格更新時的微閃爍（紅漲綠跌） */
 @keyframes flashUp   { from { background: rgba(255,59,48,0.12); } to { background: transparent; } }
