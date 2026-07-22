@@ -21,10 +21,4 @@ INSERT INTO watchlist_stocks (user_email, ticker, display_order) VALUES
 ('test@example.com', 'TSLA', 4),
 ('test@example.com', 'NVDA', 5);
 
--- 插入測試股票價格數據
-INSERT INTO stock_prices (ticker, company_name, price, prev_close, price_change, price_change_percent, market_state) VALUES 
-('AAPL', 'Apple Inc.', 150.25, 149.80, 0.45, 0.30, 'REGULAR'),
-('GOOGL', 'Alphabet Inc.', 2800.50, 2795.20, 5.30, 0.19, 'REGULAR'),
-('MSFT', 'Microsoft Corporation', 305.75, 303.25, 2.50, 0.82, 'REGULAR'),
-('TSLA', 'Tesla, Inc.', 780.90, 785.50, -4.60, -0.59, 'REGULAR'),
-('NVDA', 'NVIDIA Corporation', 450.30, 445.80, 4.50, 1.01, 'REGULAR');
+-- 股票價格由程式即時寫入，不插入假資料（假價格會在前端初始畫面短暫顯示造成誤導）

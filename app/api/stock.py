@@ -75,7 +75,7 @@ _UPSERT_STOCK_SQL = """
         ticker, price, prev_close, price_change, price_change_percent,
         company_name, logo_url, market_state, extended_price,
         extended_type, extended_change, extended_change_percent,
-        last_updated
+        updated_at
     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
     ON CONFLICT (ticker) DO UPDATE SET
         price = EXCLUDED.price,
@@ -89,7 +89,7 @@ _UPSERT_STOCK_SQL = """
         extended_type = EXCLUDED.extended_type,
         extended_change = EXCLUDED.extended_change,
         extended_change_percent = EXCLUDED.extended_change_percent,
-        last_updated = NOW();
+        updated_at = NOW();
 """
 
 _WATCHLIST_SQL = """

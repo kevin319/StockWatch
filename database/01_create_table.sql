@@ -32,7 +32,7 @@ CREATE TABLE stock_prices (
 );
 
 -- 建立股票價格表索引
-CREATE INDEX idx_stock_prices_ticker ON stock_prices(ticker);
+CREATE UNIQUE INDEX idx_stock_prices_ticker ON stock_prices(ticker);
 CREATE INDEX idx_stock_prices_created_at ON stock_prices(created_at);
 
 -- 建立自選股資料表
