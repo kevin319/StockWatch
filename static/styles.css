@@ -82,6 +82,7 @@ img { display: block; max-width: 100%; }
 
 .price-up   { color: var(--negative); } /* 紅漲（東方習慣） */
 .price-down { color: var(--positive); } /* 綠跌（東方習慣） */
+.price-flat { color: var(--text-tertiary); } /* 平盤中性 */
 
 
 /* ═══════ NAV TOP ═══════ */

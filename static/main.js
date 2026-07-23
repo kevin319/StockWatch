@@ -259,13 +259,16 @@ function renderStocks() {
     }
 
     stocks.forEach((stock, index) => {
+        // 平盤（漲跌趨近 0）中性灰、不帶正負號——+0.00% 標紅是資訊謊言
+        const flat = Math.abs(stock.price_change_percent) < 0.005;
         const up = stock.price_change >= 0;
-        const changeClass = up ? 'price-up' : 'price-down';
-        const arrow = up ? '+' : '';
+        const changeClass = flat ? 'price-flat' : (up ? 'price-up' : 'price-down');
+        const arrow = flat ? '' : (up ? '+' : '');
         const hasExtended = stock.extended_price && stock.extended_price > 0;
+        const extFlat = Math.abs(stock.extended_change_percent) < 0.005;
         const extUp = stock.extended_change >= 0;
-        const extClass = extUp ? 'price-up' : 'price-down';
-        const extArrow = extUp ? '+' : '';
+        const extClass = extFlat ? 'price-flat' : (extUp ? 'price-up' : 'price-down');
+        const extArrow = extFlat ? '' : (extUp ? '+' : '');
         const extLabel = stock.extended_type === 'PRE_MARKET' ? '盤前' : '盤後';
         const dotClass = getMarketDotClass(stock.market_state);
 
