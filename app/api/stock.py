@@ -250,15 +250,8 @@ async def get_stock_price(ticker: str):
                 price_change = info.get('regularMarketChange', 0)
                 price_change_percent = info.get('regularMarketChangePercent', 0)
 
-                # 嘗試從不同可能的欄位獲取 logo URL
-                logo_url = None
-                if 'logo_url' in info:
-                    logo_url = info['logo_url']
-                elif 'logoUrl' in info:
-                    logo_url = info['logoUrl']
-                elif 'website' in info:
-                    domain = info['website'].replace('http://', '').replace('https://', '').split('/')[0]
-                    logo_url = f'https://logo.clearbit.com/{domain}'
+                # 嘗試從不同可能的欄位獲取 logo URL（Clearbit 已停服，不再作為備源）
+                logo_url = info.get('logo_url') or info.get('logoUrl')
 
                 company_name = info.get('longName', '') or info.get('shortName', '')
 

@@ -70,11 +70,9 @@ async def fetch_finnhub_quote(ticker: str, api_key: str) -> dict | None:
                         if resp.status == 200:
                             profile = await resp.json()
                             company_name = profile.get("name", "")
+                            # Clearbit logo API 已停止服務，無備用 logo 來源；
+                            # 缺 logo 時前端會以彩色字母圖示替代
                             logo_url = profile.get("logo", None)
-                            # 用 Clearbit 作為備用 logo 來源
-                            if not logo_url and profile.get("weburl"):
-                                domain = profile["weburl"].replace("http://", "").replace("https://", "").split("/")[0]
-                                logo_url = f"https://logo.clearbit.com/{domain}"
                             _company_cache[ticker] = {
                                 "name": company_name,
                                 "logo": logo_url,
