@@ -231,7 +231,7 @@ function renderMarketClock() {
     }).join('');
 
     const summary = document.getElementById('heroSummary');
-    if (summary) summary.textContent = openCount + ' / 4 開盤';
+    if (summary) summary.textContent = openCount ? openCount + '/4 交易中' : '全部休市';
 }
 
 
@@ -422,10 +422,10 @@ function fundamentalsHtml(ticker) {
     const pct = v => (v == null || isNaN(v) || v === 0) ? '—' : Number(v).toFixed(2) + '%';
 
     const cells = [
-        ['P/E', ratio(d.pe)],   ['Dividend', moneyNZ(d.dividend)],
-        ['P/B', ratio(d.pb)],   ['Div Yield', pct(d.divYield)],
-        ['P/S', ratio(d.ps)],   ['52W High', money(d.week52High)],
-        ['EPS', money(d.eps)],  ['52W Low', money(d.week52Low)],
+        ['本益比', ratio(d.pe)],      ['股息', moneyNZ(d.dividend)],
+        ['股價淨值比', ratio(d.pb)],  ['殖利率', pct(d.divYield)],
+        ['股價營收比', ratio(d.ps)],  ['52週最高', money(d.week52High)],
+        ['每股盈餘', money(d.eps)],   ['52週最低', money(d.week52Low)],
     ];
     return `<div class="detail-grid">${cells.map(([k, v]) =>
         `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`;
@@ -449,9 +449,9 @@ function summaryHtml(ticker) {
     return `<div class="summary-section">
         <div class="summary-head">
             <span class="summary-title">AI 摘要</span>
-            <button class="summary-chat-btn" aria-label="討論這檔股票"
+            <button class="summary-chat-btn" aria-label="與 AI 討論這檔股票"
                     onclick="event.stopPropagation(); openStockChat('${ticker}')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>問 AI
             </button>
         </div>
         ${body}

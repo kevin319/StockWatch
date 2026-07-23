@@ -471,6 +471,16 @@ async def get_watchlist(user_email: str):
         print(f"獲取自選股列表時發生錯誤: {str(e)}")
         return []
 
+# Yahoo 內部交易所代碼 → 使用者看得懂的名稱（查無對應時顯示原代碼）
+_EXCHANGE_NAMES = {
+    "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ", "NYQ": "NYSE",
+    "ASE": "NYSE American", "PCX": "NYSE Arca", "BTS": "BATS",
+    "TAI": "台灣證交所", "TWO": "櫃買中心", "HKG": "港交所",
+    "SHH": "上海證交所", "SHZ": "深圳證交所",
+    "GER": "德國 XETRA", "FRA": "法蘭克福", "LSE": "倫敦", "TYO": "東京",
+}
+
+
 @router.get("/autocomplete/{query}")
 async def autocomplete(query: str):
     try:
@@ -495,10 +505,10 @@ async def autocomplete(query: str):
                 if not (symbol and short_name):
                     continue
                 
-                # 格式化顯示名稱
+                # 格式化顯示名稱（交易所代碼翻成可讀名稱）
                 display = f"{symbol} - {short_name}"
                 if exchange:
-                    display += f" ({exchange})"
+                    display += f" ({_EXCHANGE_NAMES.get(exchange, exchange)})"
                 
                 results.append({
                     'symbol': symbol,
