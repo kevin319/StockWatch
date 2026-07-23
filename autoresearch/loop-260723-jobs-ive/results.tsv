@@ -9,3 +9,4 @@ iteration	timestamp	commit	metric	delta	guard	status	description
 6	2026-07-23T09:10	-	5	-1.0	pass	keep	移除已死clearbit備源+清DB舊URL, console歸零
 7	2026-07-23T09:11	-	4	-1.0	pass	keep	補缺公司名(supplement順路)+副標重複不顯示
 8	2026-07-23T09:13	50e3587	0	-4.0	pass	keep	文案清晰化: 基本面中文label/交易所翻譯/1-4交易中/問AI按鈕. 指標歸零
+9	2026-07-23T09:14	950ef3b	0	0.0	pass	keep	WOW細節: 52週高低數字→區間位置條(綠紅漸層+現價落點), 淺色主題驗證通過
