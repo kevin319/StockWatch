@@ -173,10 +173,11 @@ function getMarketClockInfo(market) {
     return { open: false, countdownMin: null };
 }
 
+// 倒數帶中文單位——「12:28」會被誤讀成時刻，「12時28分」不會
 function formatCountdown(min) {
     const h = Math.floor(min / 60);
     const m = min % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    return h > 0 ? `${h}時${m}分` : `${m}分`;
 }
 
 function renderMarketClock() {
