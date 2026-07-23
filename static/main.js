@@ -94,7 +94,30 @@ function toggleChatWindow() {
         chatContext = null;
         const titleEl = el.querySelector('.sheet-title');
         if (titleEl) titleEl.textContent = 'AI 助理';
+        renderChatEmpty();
     }
+}
+
+// 聊天空狀態：打招呼 + 建議話題（點即送出）。全黑畫面不會告訴使用者能做什麼
+function renderChatEmpty() {
+    const box = document.getElementById('chatMessages');
+    if (!box || box.querySelector('.chat-bubble')) return; // 已有對話則不覆蓋
+    const chips = (chatContext && chatContext.ticker)
+        ? [chatContext.ticker + ' 的投資亮點與風險？', '這份摘要再展開講講', '適合長期持有嗎？']
+        : ['半導體產業的投資邏輯？', 'ETF 和個股該怎麼配置？', '怎麼判斷一支股票貴不貴？'];
+    box.innerHTML = `<div class="chat-empty">
+        <div class="chat-empty-title">想聊點什麼？</div>
+        <div class="chat-empty-desc">可以問我個股、產業或投資觀念</div>
+        <div class="chat-chips">${chips.map(c =>
+            `<button class="chat-chip" onclick="sendSuggestion(this.textContent)">${c}</button>`).join('')}</div>
+    </div>`;
+}
+
+function sendSuggestion(text) {
+    const input = document.getElementById('messageInput');
+    if (!input) return;
+    input.value = text;
+    sendMessage();
 }
 
 function toggleSettingsPage() {
@@ -449,6 +472,7 @@ function openStockChat(ticker) {
 
     const chatWindow = document.getElementById('chatWindow');
     if (chatWindow) chatWindow.classList.remove('hidden');
+    renderChatEmpty();
 }
 
 function updateHeroCaption() {
@@ -920,6 +944,9 @@ async function sendMessage() {
     const chatMessages = document.getElementById('chatMessages');
     const message = messageInput.value.trim();
     if (!message) return;
+
+    const emptyState = chatMessages.querySelector('.chat-empty');
+    if (emptyState) emptyState.remove();
 
     const userBubble = document.createElement('div');
     userBubble.className = 'chat-bubble chat-bubble-user';
