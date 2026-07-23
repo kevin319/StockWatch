@@ -387,11 +387,15 @@ async def get_fundamentals(ticker: str):
                 return cached
 
         info = await asyncio.to_thread(lambda: yf.Ticker(_yf_ticker(ticker)).info) or {}
+        # ADR/外國股票的股價幣別與財報幣別不同時（如 TSM: USD/TWD），
+        # Yahoo 的 P/B、P/S 是跨幣別誤除的錯值（TSM P/B 會變 87）——寧缺勿錯，回 null
+        cur, fin_cur = info.get("currency"), info.get("financialCurrency")
+        mixed_ccy = bool(cur and fin_cur and cur != fin_cur)
         data = {
             "ticker": ticker,
             "pe": info.get("trailingPE"),
-            "pb": info.get("priceToBook"),
-            "ps": info.get("priceToSalesTrailing12Months"),
+            "pb": None if mixed_ccy else info.get("priceToBook"),
+            "ps": None if mixed_ccy else info.get("priceToSalesTrailing12Months"),
             "eps": info.get("trailingEps"),
             "dividend": info.get("dividendRate"),
             "divYield": info.get("dividendYield"),
