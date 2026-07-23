@@ -2,3 +2,5 @@
 iteration	timestamp	commit	metric	delta	guard	status	description
 0	2026-07-23T08:55	326cd33	16	0.0	pass	baseline	1×P0(基本面跨幣別錯值TSM P/B 87) 4×P1(平盤+0.00%顯紅/時鐘倒數像時刻/圓點語意不明/AI助理空狀態全黑) 5×P2(KORU名稱fallback重複/label中英混雜/交易所raw代碼/0/4開盤壓縮/摘要icon不明)
 1	2026-07-23T09:03	d982d94	13	-3.0	pass	keep	P0清除: ADR跨幣別 P/B、P/S 回 null 顯示「—」(TSM 驗證 null, AAPL 不受影響)
+2	2026-07-23T09:05	f2abb04	11	-2.0	pass	keep	平盤漲跌0中性灰去符號(price-flat), 主行+ext行皆套用
+3	2026-07-23T09:07	c8ae591	9	-2.0	pass	keep	倒數加中文單位12時26分/26分, 時刻誤讀消除

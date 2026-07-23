@@ -121,10 +121,10 @@ function getMarketStateText(state) {
     }
 }
 
+// 圓點只有一種語意：綠=交易中。其他狀態不顯示點（盤前/盤後已由文字行表達），
+// 三態圓點需要使用者猜含義——需要解釋的 UI 就是失敗的 UI
 function getMarketDotClass(state) {
-    if (state === 'REGULAR') return 'market-dot-live';
-    if (state === 'PRE') return 'market-dot-pre';
-    return 'market-dot-close';
+    return state === 'REGULAR' ? 'market-dot-live' : '';
 }
 
 /* ═══════ MARKET CLOCK ═══════ */
@@ -285,7 +285,7 @@ function renderStocks() {
             ${tileHtml(stock)}
             <div class="row-info">
                 <div class="ty-row">
-                    <span class="market-dot ${dotClass}"></span>${stock.ticker}
+                    ${dotClass ? `<span class="market-dot ${dotClass}"></span>` : ''}${stock.ticker}
                 </div>
                 <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
             </div>

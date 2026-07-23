@@ -393,8 +393,6 @@ img { display: block; max-width: 100%; }
 }
 
 .market-dot-live  { background: var(--positive); }
-.market-dot-pre   { background: #ff9500; }
-.market-dot-close { background: var(--text-quaternary); }
 
 
 /* ═══════ PAGE CONTENT ═══════ */
