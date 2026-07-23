@@ -23,7 +23,7 @@ CREATE TABLE stock_prices (
     price_change_percent DECIMAL(10,2),
     market_state VARCHAR(20),
     extended_price DECIMAL(10,2),
-    extended_type VARCHAR(10),
+    extended_type VARCHAR(20),  -- POST_MARKET / AFTER_HOURS 為 11 字，VARCHAR(10) 會寫入失敗
     extended_change DECIMAL(10,2),
     extended_change_percent DECIMAL(10,2),
     logo_url TEXT,

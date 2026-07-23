@@ -229,8 +229,8 @@ img { display: block; max-width: 100%; }
 
 .v2-row {
   display: grid;
-  /* 價格欄固定寬度，確保走勢圖在各列水平對齊（不受盤前/盤後資訊影響） */
-  grid-template-columns: 40px minmax(0, 1fr) 54px 108px;
+  /* 標的資訊｜股價欄｜漲跌幅欄：漲跌幅欄固定寬度，讓各列的 % 垂直對齊 */
+  grid-template-columns: 40px minmax(0, 1fr) max-content 84px;
   gap: 10px;
   align-items: center;
   padding: 12px 20px;
@@ -296,7 +296,7 @@ img { display: block; max-width: 100%; }
 /* 載入骨架 shimmer */
 .skeleton-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 54px 108px;
+  grid-template-columns: 40px minmax(0, 1fr) 108px;
   gap: 10px; align-items: center; padding: 12px 20px;
 }
 .skeleton-row + .skeleton-row { border-top: 0.5px solid var(--hairline); }
@@ -315,7 +315,6 @@ img { display: block; max-width: 100%; }
 .sk-line  { height: 12px; }
 .sk-line.w1 { width: 55%; }
 .sk-line.w2 { width: 80%; margin-top: 7px; }
-.sk-spark { height: 20px; }
 .sk-price { height: 14px; }
 
 .v2-tile {
@@ -350,42 +349,40 @@ img { display: block; max-width: 100%; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.row-spark {
-  width: 54px; height: 28px;
-  flex-shrink: 0;
-  display: flex; align-items: center;
-}
-
-.spark-svg { width: 54px; height: 28px; display: block; }
-
-.row-price {
-  text-align: right;
+/* 價格欄與漲跌欄各自直向兩行：上為現價/漲跌幅，下為盤前/盤後對應值，上下對齊方便比價。
+   兩欄固定同高且內容靠上，沒有盤前/盤後的股票價格仍與漲跌 % 首行對齊（下方留空） */
+.row-price,
+.row-change {
   display: flex; flex-direction: column; align-items: flex-end;
-  gap: 2px;
+  justify-content: flex-start;
+  min-height: 39px; /* 17px*1.2 + 3px gap + 13px*1.2，兩行的高度 */
+  gap: 3px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .row-price .price-main {
-  font: 600 16px/1.20 var(--font);
+  font: 600 17px/1.20 var(--font);
   letter-spacing: -0.32px;
   color: var(--text);
 }
 
-.row-price .price-change {
-  font: 500 13px/1.20 var(--font);
-  letter-spacing: -0.08px;
-  display: flex; align-items: center; gap: 2px;
-}
-
-.row-price .price-extended {
-  font: 400 11px/1.20 var(--font);
+.row-price .ext-price {
+  font: 400 13px/1.20 var(--font);
   letter-spacing: -0.08px;
   color: var(--text-tertiary);
-  display: flex; align-items: center; gap: 3px;
-  margin-top: 1px;
+  white-space: nowrap;
 }
 
-.price-extended .ext-change { font: inherit; }
+.row-change .price-change {
+  font: 600 17px/1.20 var(--font);
+  letter-spacing: -0.32px;
+}
+
+.row-change .ext-change {
+  font: 400 13px/1.20 var(--font);
+  letter-spacing: -0.08px;
+}
 
 .market-dot {
   width: 6px; height: 6px;

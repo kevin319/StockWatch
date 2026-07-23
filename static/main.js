@@ -65,7 +65,6 @@ let draggedItem = null;
 let draggedItemIndex = null;
 let touchStartY = null;
 let currentTouchItem = null;
-let sparkData = {}; // ticker -> 近期收盤序列
 let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向（供微閃爍）
 let firstStockRender = true; // 首次渲染真實資料時做淡入
 let expandedTicker = null;    // 目前展開基本面的代號（一次一個）
@@ -226,25 +225,6 @@ function tileHtml(stock) {
     return `<div class="v2-tile"><span class="tile-initial" style="background:${grad}">${label}</span></div>`;
 }
 
-// 由收盤序列產生迷你走勢圖 SVG，依區間淨變動上色（紅漲綠跌）
-function sparklineSvg(points) {
-    if (!points || points.length < 2) return '';
-    const w = 54, h = 28, pad = 3;
-    const min = Math.min(...points), max = Math.max(...points);
-    const range = (max - min) || 1;
-    const stepX = (w - pad * 2) / (points.length - 1);
-    const coords = points.map((p, i) => {
-        const x = pad + i * stepX;
-        const y = pad + (h - pad * 2) * (1 - (p - min) / range);
-        return x.toFixed(1) + ',' + y.toFixed(1);
-    }).join(' ');
-    const up = points[points.length - 1] >= points[0];
-    const color = up ? 'var(--negative)' : 'var(--positive)'; // 紅漲綠跌
-    return `<svg class="spark-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-        <polyline points="${coords}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>`;
-}
-
 // 載入骨架（資料抵達前的優雅占位）
 function renderSkeleton(n = 4) {
     const stockList = document.getElementById('stockList');
@@ -254,7 +234,6 @@ function renderSkeleton(n = 4) {
         html += `<div class="skeleton-row">
             <div class="sk sk-tile"></div>
             <div><div class="sk sk-line w1"></div><div class="sk sk-line w2"></div></div>
-            <div class="sk sk-spark"></div>
             <div class="sk sk-price"></div>
         </div>`;
     }
@@ -306,15 +285,15 @@ function renderStocks() {
                 </div>
                 <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
             </div>
-            <div class="row-spark">${sparklineSvg(sparkData[stock.ticker])}</div>
             <div class="row-price">
                 <span class="price-main">${stock.price.toFixed(2)}</span>
+                ${hasExtended ? `<span class="ext-price">${extLabel} ${stock.extended_price.toFixed(2)}</span>` : ''}
+            </div>
+            <div class="row-change">
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
-                ${hasExtended ? `
-                <span class="price-extended">
-                    ${extLabel} ${stock.extended_price.toFixed(2)}
-                    <span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>
-                </span>` : ''}
+                ${hasExtended
+                    ? `<span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>`
+                    : `<span class="ext-change ${changeClass}">${arrow}${stock.price_change.toFixed(2)}</span>`}
             </div>`;
         row.addEventListener('click', () => toggleExpand(stock.ticker));
         item.appendChild(row);
@@ -468,30 +447,6 @@ function openStockChat(ticker) {
     if (chatWindow) chatWindow.classList.remove('hidden');
 }
 
-// 載入各股票走勢序列。只補「尚未成功取得」的；限制併發避免 yfinance 被限流；
-// 只存有資料的結果，空的（失敗）留待下次輪詢重試。
-async function loadSparklines() {
-    const targets = stocks.filter(s => !sparkData[s.ticker] || !sparkData[s.ticker].length);
-    if (!targets.length) return;
-
-    const CONCURRENCY = 3;
-    let changed = false;
-    for (let i = 0; i < targets.length; i += CONCURRENCY) {
-        const batch = targets.slice(i, i + CONCURRENCY);
-        await Promise.all(batch.map(async (s) => {
-            try {
-                const res = await fetch('/sparkline/' + s.ticker);
-                const data = await res.json();
-                if (Array.isArray(data.points) && data.points.length) {
-                    sparkData[s.ticker] = data.points;
-                    changed = true;
-                }
-            } catch {}
-        }));
-    }
-    if (changed) renderStocks();
-}
-
 function updateHeroCaption() {
     const el = document.getElementById('heroCaption');
     if (!el) return;
@@ -584,7 +539,6 @@ async function addToWatchlist(ticker) {
         stocks.push(stockData);
         renderSettingsStockList();
         renderStocks();
-        loadSparklines();
 
         document.getElementById('searchResults').classList.add('hidden');
         document.getElementById('searchInput').value = '';
@@ -852,7 +806,6 @@ async function updateStockPrices() {
         stocks = updated;
         renderStocks();
         updateLastUpdateTime();
-        loadSparklines(); // 補抓上次失敗（空）的走勢圖
     } catch (error) {
         console.error('更新股票價格時發生錯誤:', error);
     }
@@ -887,7 +840,6 @@ async function initializeStocks() {
 
         renderStocks();
         renderSettingsStockList();
-        loadSparklines();
         updateStockPrices();
         schedulePoll();
         updateLastUpdateTime();
