@@ -310,7 +310,7 @@ function renderStocks() {
                 <div class="ty-row">
                     ${dotClass ? `<span class="market-dot ${dotClass}"></span>` : ''}${stock.ticker}
                 </div>
-                <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
+                <div class="ty-subtitle">${(stock.company_name && stock.company_name !== stock.ticker) ? stock.company_name : ''}</div>
             </div>
             <div class="row-price">
                 <span class="price-main">${stock.price.toFixed(2)}</span>
@@ -503,7 +503,7 @@ function renderSettingsStockList() {
             ${tileHtml(stock)}
             <div class="row-info">
                 <div class="ty-row">${stock.ticker}</div>
-                <div class="ty-subtitle">${stock.company_name || stock.ticker}</div>
+                <div class="ty-subtitle">${(stock.company_name && stock.company_name !== stock.ticker) ? stock.company_name : ''}</div>
             </div>
             <div class="drag-handle">${SVG_DRAG}</div>
             <button type="button" class="delete-btn" data-ticker="${stock.ticker}">

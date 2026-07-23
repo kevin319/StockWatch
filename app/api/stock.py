@@ -35,6 +35,9 @@ async def _supplement_us_extended(ticker: str, data: dict) -> None:
     """
     try:
         info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info) or {}
+        # 順路補缺的公司名（Finnhub 對 ETF 常回空名），避免前端只能顯示代號
+        if not data.get('company_name'):
+            data['company_name'] = info.get('longName') or info.get('shortName') or ''
         state = data.get('market_state', '')
         if state == 'PRE':
             pre = info.get('preMarketPrice')
