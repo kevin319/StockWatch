@@ -6,3 +6,6 @@ iteration	timestamp	commit	metric	delta	guard	status	description
 3	2026-07-23T09:07	c8ae591	9	-2.0	pass	keep	倒數加中文單位12時26分/26分, 時刻誤讀消除
 4	2026-07-23T09:08	fbb9d24	7	-2.0	pass	keep	圓點單一語意: 僅交易中亮綠點
 5	2026-07-23T09:08	fbb9d24	6	-1.0	pass	keep	聊天空狀態+建議chips(全流程驗證); 新發現P2: clearbit已死(+1)
+6	2026-07-23T09:10	-	5	-1.0	pass	keep	移除已死clearbit備源+清DB舊URL, console歸零
+7	2026-07-23T09:11	-	4	-1.0	pass	keep	補缺公司名(supplement順路)+副標重複不顯示
+8	2026-07-23T09:13	50e3587	0	-4.0	pass	keep	文案清晰化: 基本面中文label/交易所翻譯/1-4交易中/問AI按鈕. 指標歸零

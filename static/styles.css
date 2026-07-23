@@ -261,6 +261,36 @@ img { display: block; max-width: 100%; }
   padding: 12px 20px 16px;
 }
 .metric { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* 52 週區間位置條：現價落點一眼看出貴賤 */
+.range52 { padding: 0 20px 16px; }
+
+.range52-bar {
+  position: relative;
+  height: 4px;
+  margin: 10px 0 6px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--positive), var(--text-quaternary) 50%, var(--negative));
+  opacity: 0.9;
+}
+
+.range52-dot {
+  position: absolute;
+  top: 50%;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2.5px solid var(--card);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+
+.range52-ends {
+  display: flex; justify-content: space-between;
+  font: 400 11px/1 var(--font);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
 .metric-label { font: 500 11px/1 var(--font); color: var(--text-tertiary); letter-spacing: 0.02em; }
 .metric-value { font: 600 15px/1.1 var(--font); color: var(--text); font-variant-numeric: tabular-nums; }
 .detail-empty { padding: 14px 20px; text-align: center; color: var(--text-tertiary); font: 400 13px var(--font); }

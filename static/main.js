@@ -407,12 +407,12 @@ function detailHtml(ticker) {
     return fundamentalsHtml(ticker) + summaryHtml(ticker);
 }
 
-// 基本面面板 HTML（2 欄 × 4 列指標格）
+// 基本面面板 HTML（2 欄 × 3 列指標格 + 52 週區間位置條）
 function fundamentalsHtml(ticker) {
     const d = fundData[ticker];
     if (!d || d === 'loading') {
         const sk = '<div class="metric"><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:42%;margin-top:6px"></div></div>';
-        return `<div class="detail-grid">${sk.repeat(8)}</div>`;
+        return `<div class="detail-grid">${sk.repeat(6)}</div>`;
     }
     if (d.error) return `<div class="detail-empty">無法取得基本面資料</div>`;
 
@@ -424,11 +424,26 @@ function fundamentalsHtml(ticker) {
     const cells = [
         ['本益比', ratio(d.pe)],      ['股息', moneyNZ(d.dividend)],
         ['股價淨值比', ratio(d.pb)],  ['殖利率', pct(d.divYield)],
-        ['股價營收比', ratio(d.ps)],  ['52週最高', money(d.week52High)],
-        ['每股盈餘', money(d.eps)],   ['52週最低', money(d.week52Low)],
+        ['股價營收比', ratio(d.ps)],  ['每股盈餘', money(d.eps)],
     ];
     return `<div class="detail-grid">${cells.map(([k, v]) =>
-        `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`;
+        `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`
+        + week52RangeHtml(ticker, d);
+}
+
+// 52 週區間位置條：現價在高低點之間的落點，一眼看出相對位置
+function week52RangeHtml(ticker, d) {
+    const lo = Number(d.week52Low), hi = Number(d.week52High);
+    if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return '';
+    const stock = stocks.find(s => s.ticker === ticker);
+    const price = stock ? Number(stock.price) : NaN;
+    if (!isFinite(price) || price <= 0) return '';
+    const pos = Math.min(100, Math.max(0, (price - lo) / (hi - lo) * 100));
+    return `<div class="range52">
+        <div class="metric-label">52週區間</div>
+        <div class="range52-bar"><div class="range52-dot" style="left:${pos.toFixed(1)}%"></div></div>
+        <div class="range52-ends"><span>${lo.toFixed(2)}</span><span>${hi.toFixed(2)}</span></div>
+    </div>`;
 }
 
 // AI 摘要區 HTML：標題列（含 💬 對話按鈕）+ 摘要文字 + 免責
