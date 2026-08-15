@@ -65,6 +65,7 @@ let draggedItem = null;
 let draggedItemIndex = null;
 let touchStartY = null;
 let currentTouchItem = null;
+let dragCtx = null;        // 目前拖曳的上下文（容器、列選擇器、排序回呼）
 let priceFlash = {}; // ticker -> 'up'|'down'，本次更新價格變動方向（供微閃爍）
 let firstStockRender = true; // 首次渲染真實資料時做淡入
 let expandedTicker = null;    // 目前展開基本面的代號（一次一個）
@@ -532,10 +533,18 @@ function renderSettingsStockList() {
         });
 
         const handle = row.querySelector('.drag-handle');
-        handle.addEventListener('touchstart', handleTouchStart, { passive: false });
-        handle.addEventListener('touchmove', handleTouchMove, { passive: false });
-        handle.addEventListener('touchend', handleTouchEnd);
-        handle.addEventListener('mousedown', handleMouseDown);
+        attachDragHandlers(handle, {
+            containerId: 'settingsStockList',
+            rowSelector: '.settings-row',
+            onReorder: (from, to) => {
+                const item = stocks[from];
+                stocks.splice(from, 1);
+                stocks.splice(to, 0, item);
+                renderSettingsStockList();
+                renderStocks();
+                updateStockOrder();
+            },
+        });
 
         container.appendChild(row);
     });
@@ -596,15 +605,26 @@ async function addToWatchlist(ticker) {
 
 /* ═══════ TOUCH DRAG ═══════ */
 
+// 把拖曳行為綁到把手上。ctx 描述「拖的是哪個清單」，讓設定頁與清單抽屜共用同一套邏輯。
+// ctx = { containerId, rowSelector, onReorder(fromIndex, toIndex) }
+function attachDragHandlers(handle, ctx) {
+    handle._dragCtx = ctx;
+    handle.addEventListener('touchstart', handleTouchStart, { passive: false });
+    handle.addEventListener('touchmove', handleTouchMove, { passive: false });
+    handle.addEventListener('touchend', handleTouchEnd);
+    handle.addEventListener('mousedown', handleMouseDown);
+}
+
 function handleTouchStart(e) {
     e.preventDefault();
     e.stopPropagation();
 
     const touch = e.touches[0];
     const handle = e.target.closest('.drag-handle');
-    if (!handle) return;
+    if (!handle || !handle._dragCtx) return;
 
-    const item = handle.closest('.settings-row');
+    dragCtx = handle._dragCtx;
+    const item = handle.closest(dragCtx.rowSelector);
     if (!item) return;
 
     touchStartY = touch.clientY;
@@ -615,7 +635,7 @@ function handleTouchStart(e) {
     item.style.zIndex = '1000';
     item.classList.add('touch-dragging');
 
-    const items = document.querySelectorAll('.settings-row');
+    const items = document.getElementById(dragCtx.containerId).querySelectorAll(dragCtx.rowSelector);
     items.forEach(i => {
         if (i !== item) i.style.transition = 'transform 0.3s ease';
     });
@@ -630,8 +650,8 @@ function handleTouchMove(e) {
     const moveY = touch.clientY - touchStartY;
     currentTouchItem.style.transform = 'translateY(' + moveY + 'px)';
 
-    const container = document.getElementById('settingsStockList');
-    const items = Array.from(container.querySelectorAll('.settings-row'));
+    const container = document.getElementById(dragCtx.containerId);
+    const items = Array.from(container.querySelectorAll(dragCtx.rowSelector));
     const itemHeight = currentTouchItem.offsetHeight;
     const currentIndex = items.indexOf(currentTouchItem);
     const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
@@ -652,8 +672,8 @@ function handleTouchMove(e) {
 function handleTouchEnd() {
     if (!currentTouchItem) return;
 
-    const container = document.getElementById('settingsStockList');
-    const items = Array.from(container.querySelectorAll('.settings-row'));
+    const container = document.getElementById(dragCtx.containerId);
+    const items = Array.from(container.querySelectorAll(dragCtx.rowSelector));
     const currentIndex = items.indexOf(currentTouchItem);
     const raw = currentTouchItem.style.transform;
     const moveY = parseFloat(raw.replace('translateY(', '').replace('px)', '') || 0);
@@ -661,24 +681,22 @@ function handleTouchEnd() {
     const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
     const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
 
-    if (boundedIndex !== currentIndex) {
-        const itemToMove = stocks[currentIndex];
-        stocks.splice(currentIndex, 1);
-        stocks.splice(boundedIndex, 0, itemToMove);
-        renderSettingsStockList();
-        renderStocks();
-        updateStockOrder();
-    } else {
-        items.forEach(item => { item.style.transform = ''; item.style.transition = ''; });
-    }
-
+    // 先清掉拖曳中的樣式，再交給 onReorder 重繪（重繪會換掉整批 DOM）
     currentTouchItem.style.position = '';
     currentTouchItem.style.zIndex = '';
     currentTouchItem.style.transform = '';
     currentTouchItem.classList.remove('touch-dragging');
+
+    if (boundedIndex !== currentIndex) {
+        dragCtx.onReorder(currentIndex, boundedIndex);
+    } else {
+        items.forEach(item => { item.style.transform = ''; item.style.transition = ''; });
+    }
+
     currentTouchItem = null;
     touchStartY = null;
     draggedItemIndex = null;
+    dragCtx = null;
 }
 
 
@@ -687,12 +705,14 @@ function handleTouchEnd() {
 function handleMouseDown(e) {
     e.preventDefault();
     const handle = e.target.closest('.drag-handle');
-    if (!handle) return;
+    if (!handle || !handle._dragCtx) return;
 
-    const item = handle.closest('.settings-row');
+    dragCtx = handle._dragCtx;
+    const item = handle.closest(dragCtx.rowSelector);
     if (!item) return;
 
     const startY = e.clientY;
+    const ctx = dragCtx;              // 閉包內固定用這份，避免拖曳中被其他把手覆寫
     currentTouchItem = item;
     draggedItemIndex = parseInt(item.dataset.index);
 
@@ -700,8 +720,8 @@ function handleMouseDown(e) {
     item.style.zIndex = '1000';
     item.classList.add('touch-dragging');
 
-    const container = document.getElementById('settingsStockList');
-    const items = Array.from(container.querySelectorAll('.settings-row'));
+    const container = document.getElementById(ctx.containerId);
+    const items = Array.from(container.querySelectorAll(ctx.rowSelector));
     items.forEach(i => {
         if (i !== item) i.style.transition = 'transform 0.3s ease';
     });
@@ -740,23 +760,20 @@ function handleMouseDown(e) {
         const targetIndex = Math.round(moveY / itemHeight) + currentIndex;
         const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
 
-        if (boundedIndex !== currentIndex) {
-            const itemToMove = stocks[currentIndex];
-            stocks.splice(currentIndex, 1);
-            stocks.splice(boundedIndex, 0, itemToMove);
-            renderSettingsStockList();
-            renderStocks();
-            updateStockOrder();
-        } else {
-            items.forEach(it => { it.style.transform = ''; it.style.transition = ''; });
-        }
-
         currentTouchItem.style.position = '';
         currentTouchItem.style.zIndex = '';
         currentTouchItem.style.transform = '';
         currentTouchItem.classList.remove('touch-dragging');
+
+        if (boundedIndex !== currentIndex) {
+            ctx.onReorder(currentIndex, boundedIndex);
+        } else {
+            items.forEach(it => { it.style.transform = ''; it.style.transition = ''; });
+        }
+
         currentTouchItem = null;
         draggedItemIndex = null;
+        dragCtx = null;
     }
 
     document.addEventListener('mousemove', onMouseMove);
