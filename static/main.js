@@ -58,6 +58,13 @@ const SVG_ADD = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" str
 const SVG_EMPTY = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M7 17l4-4 3 2 3-3"/></svg>';
 
 
+/* ═══════ FEATURE FLAGS ═══════ */
+
+// AI 對話（聊天面板）暫不開放。改成 true 即可恢復 nav 對話鈕與摘要區的「問 AI」。
+// 注意：只關 UI，後端 /api/chat 仍在。AI 摘要不受此開關影響。
+const AI_CHAT_ENABLED = false;
+
+
 /* ═══════ STATE ═══════ */
 
 let stocks = [];
@@ -87,6 +94,7 @@ function initStockData() {
 /* ═══════ UI TOGGLES ═══════ */
 
 function toggleChatWindow() {
+    if (!AI_CHAT_ENABLED) return;
     const el = document.getElementById('chatWindow');
     const opening = el.classList.contains('hidden');
     el.classList.toggle('hidden');
@@ -462,13 +470,17 @@ function summaryHtml(ticker) {
     } else {
         body = `<div class="summary-text">${escapeHtml(s)}</div>`;
     }
+    const chatBtn = AI_CHAT_ENABLED
+        ? `<button class="summary-chat-btn" aria-label="與 AI 討論這檔股票"
+                    onclick="event.stopPropagation(); openStockChat('${ticker}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>問 AI
+            </button>`
+        : '';
+
     return `<div class="summary-section">
         <div class="summary-head">
             <span class="summary-title">AI 摘要</span>
-            <button class="summary-chat-btn" aria-label="與 AI 討論這檔股票"
-                    onclick="event.stopPropagation(); openStockChat('${ticker}')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>問 AI
-            </button>
+            ${chatBtn}
         </div>
         ${body}
         <div class="summary-disclaimer">AI 生成，僅供參考</div>
@@ -477,6 +489,7 @@ function summaryHtml(ticker) {
 
 // 從股票面板開啟聊天：帶入脈絡並切換到聊天視窗
 function openStockChat(ticker) {
+    if (!AI_CHAT_ENABLED) return;
     const summary = (summaryData[ticker] && summaryData[ticker] !== 'loading') ? summaryData[ticker] : '';
     chatContext = { ticker, summary };
 
@@ -906,6 +919,11 @@ async function initializeStocks() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadTheme();
+    // AI 對話未開放時，收起 nav 的對話鈕（面板本身預設就是 hidden）
+    if (!AI_CHAT_ENABLED) {
+        const chatBtn = document.getElementById('navChatBtn');
+        if (chatBtn) chatBtn.classList.add('hidden');
+    }
     initializeStocks();
     renderMarketClock();
     setInterval(renderMarketClock, 1000);
