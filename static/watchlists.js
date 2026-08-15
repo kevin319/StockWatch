@@ -91,7 +91,15 @@ async function switchWatchlist(id) {
         currentWatchlistId = id;
         localStorage.setItem(LS_CURRENT_WATCHLIST, id);
         updateNavWatchlistName();
-        await loadCurrentWatchlistStocks();   // 定義在 main.js
+        try {
+            await loadCurrentWatchlistStocks();   // 定義在 main.js
+        } catch (error) {
+            console.error('切換清單時發生錯誤:', error);
+            showToast('切換清單失敗，請稍後再試');
+        } finally {
+            closeWatchlistDrawer();
+        }
+        return;
     }
     closeWatchlistDrawer();
 }

@@ -901,15 +901,19 @@ async function loadCurrentWatchlistStocks() {
     const email = getCurrentUserEmail();
     if (!email || !currentWatchlistId) { stocks = []; renderStocks(); return; }
 
+    const requestedWatchlistId = currentWatchlistId; // 記住這次請求對應的清單，避免舊回應蓋掉新清單
     expandedTicker = null;   // 換清單時收合展開中的個股
     renderSkeleton();
 
     const response = await fetch(
-        '/watchlists/' + currentWatchlistId + '/stocks?user_email=' + encodeURIComponent(email)
+        '/watchlists/' + requestedWatchlistId + '/stocks?user_email=' + encodeURIComponent(email)
     );
     if (!response.ok) throw new Error('獲取股票數據失敗');
 
-    stocks = await response.json();
+    const data = await response.json();
+    if (currentWatchlistId !== requestedWatchlistId) return; // 已切到別的清單，這筆回應過期了
+
+    stocks = data;
     renderStocks();
     renderSettingsStockList();
     updateStockPrices();
