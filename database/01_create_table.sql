@@ -35,17 +35,40 @@ CREATE TABLE stock_prices (
 CREATE UNIQUE INDEX idx_stock_prices_ticker ON stock_prices(ticker);
 CREATE INDEX idx_stock_prices_created_at ON stock_prices(created_at);
 
+-- 建立自選股清單（分組）資料表
+CREATE TABLE watchlists (
+    id SERIAL PRIMARY KEY,
+    user_email VARCHAR(255) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    display_order INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_watchlists_user_email
+        FOREIGN KEY (user_email)
+        REFERENCES users(email)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_watchlists_user ON watchlists(user_email, display_order);
+-- 同一使用者不分大小寫不可有同名清單
+CREATE UNIQUE INDEX idx_watchlists_user_name ON watchlists(user_email, lower(name));
+
 -- 建立自選股資料表
 CREATE TABLE watchlist_stocks (
     id SERIAL PRIMARY KEY,
     user_email VARCHAR(255) NOT NULL,
+    watchlist_id INTEGER NOT NULL,
     ticker VARCHAR(20) NOT NULL,
     display_order INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user_email 
-        FOREIGN KEY (user_email) 
-        REFERENCES users(email) 
+    CONSTRAINT fk_user_email
+        FOREIGN KEY (user_email)
+        REFERENCES users(email)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_watchlist_stocks_watchlist
+        FOREIGN KEY (watchlist_id)
+        REFERENCES watchlists(id)
         ON DELETE CASCADE
 );
 
@@ -53,5 +76,5 @@ CREATE TABLE watchlist_stocks (
 CREATE INDEX idx_watchlist_stocks_user_email ON watchlist_stocks(user_email);
 CREATE INDEX idx_watchlist_stocks_ticker ON watchlist_stocks(ticker);
 
--- 建立唯一約束，確保同一用戶不會重複添加相同股票
-CREATE UNIQUE INDEX idx_unique_user_ticker ON watchlist_stocks(user_email, ticker);
+-- 同一清單內不可重複；不同清單可放同一支股票（多重歸屬）
+CREATE UNIQUE INDEX idx_unique_watchlist_ticker ON watchlist_stocks(watchlist_id, ticker);

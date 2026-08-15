@@ -10,6 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.api import auth, stock, chat
 from app.models.db import get_db_connection
+from app.models.migrations import ensure_watchlist_groups
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,12 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(_ensure_summary_table)
     except Exception as e:
         logger.error(f"建立 stock_summaries 表失敗: {e}")
+
+    # 清單分組遷移（失敗不可讓 app 崩潰）
+    try:
+        await asyncio.to_thread(ensure_watchlist_groups)
+    except Exception as e:
+        logger.error(f"watchlist groups 遷移失敗: {e}")
 
     # 啟動排程（失敗不可讓 app 崩潰）
     try:
