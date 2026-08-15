@@ -78,6 +78,22 @@
         <div id="searchResults" class="search-results hidden"></div>
     </div>
 
+    <!-- 清單選擇器 -->
+    <div id="listPickerWrap" class="picker-wrap hidden">
+        <div class="picker-scrim" onclick="closeListPicker()"></div>
+        <div class="picker-sheet">
+            <div class="picker-head">
+                <span class="picker-title">加入清單</span>
+                <span class="picker-ticker" id="pickerTicker"></span>
+            </div>
+            <div id="pickerList" class="picker-list"></div>
+            <div class="picker-foot">
+                <button class="pill-btn pill-btn-secondary" onclick="closeListPicker()">取消</button>
+                <button class="pill-btn pill-btn-primary" onclick="submitListPicker()">完成</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Sheet -->
     <div id="settingsPage" class="sheet hidden">
         <div class="sheet-nav">

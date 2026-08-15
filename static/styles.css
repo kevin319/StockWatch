@@ -1242,3 +1242,101 @@ body.login-body {
   padding: 4px 0;
   border-bottom: 1px solid var(--brand);
 }
+
+/* ═══════ LIST PICKER ═══════ */
+
+.picker-wrap {
+  position: fixed;
+  inset: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.picker-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  animation: scrimIn 240ms ease;
+}
+
+.picker-sheet {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  animation: pickerIn 280ms cubic-bezier(.25,.1,.25,1);
+}
+
+@keyframes pickerIn { from { transform: translateY(100%); } to { transform: none; } }
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px 20px 12px;
+}
+
+.picker-title {
+  font: 700 20px/1.20 var(--font);
+  letter-spacing: -0.50px;
+  color: var(--text);
+}
+
+.picker-ticker {
+  font: 400 13px/1.30 var(--font);
+  letter-spacing: -0.08px;
+  color: var(--text-secondary);
+}
+
+.picker-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 20px;
+}
+
+.picker-row + .picker-row { border-top: 0.5px solid var(--hairline); }
+.picker-row:active { background: var(--well); }
+
+.picker-row-name {
+  font: 600 16px/1.20 var(--font);
+  letter-spacing: -0.32px;
+  color: var(--text);
+}
+
+.picker-check {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-quaternary);
+  display: flex; align-items: center; justify-content: center;
+  color: transparent;
+  flex-shrink: 0;
+}
+
+.picker-row.checked .picker-check {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.picker-foot {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 0.5px solid var(--hairline);
+}

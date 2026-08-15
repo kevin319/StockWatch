@@ -315,3 +315,99 @@ async function refreshWatchlistCounts() {
         console.error('更新清單計數時發生錯誤:', error);
     }
 }
+
+/* ═══════ 清單選擇器 ═══════ */
+
+let pickerTicker = null;        // 目前正在編輯歸屬的代號
+let pickerSelected = new Set(); // 勾選中的清單 id
+let pickerOriginal = new Set(); // 開啟當下伺服器端的實際歸屬（不含預選），用來判斷目前清單是否被異動
+
+const SVG_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+// 開啟選擇器；預先勾選該股票目前所屬的清單
+async function openListPicker(ticker) {
+    const email = getCurrentUserEmail();
+    if (!email) return;
+
+    pickerTicker = ticker;
+    pickerSelected = new Set();
+
+    try {
+        const response = await fetch(
+            '/watchlist/memberships/' + encodeURIComponent(email) + '/' + encodeURIComponent(ticker)
+        );
+        if (response.ok) {
+            (await response.json()).forEach(id => pickerSelected.add(id));
+        }
+    } catch (error) {
+        console.error('取得歸屬時發生錯誤:', error);
+    }
+
+    pickerOriginal = new Set(pickerSelected); // 先存下真實歸屬，才套用下面的預選方便性
+
+    // 尚未屬於任何清單時，預設勾選目前正在看的清單
+    if (!pickerSelected.size && currentWatchlistId) pickerSelected.add(currentWatchlistId);
+
+    document.getElementById('pickerTicker').textContent = ticker;
+    renderListPicker();
+    document.getElementById('listPickerWrap').classList.remove('hidden');
+}
+
+function renderListPicker() {
+    const container = document.getElementById('pickerList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    watchlists.forEach(list => {
+        const checked = pickerSelected.has(list.id);
+        const row = document.createElement('div');
+        row.className = 'picker-row' + (checked ? ' checked' : '');
+        row.innerHTML = `
+            <span class="picker-row-name">${escapeHtml(list.name)}</span>
+            <span class="picker-check">${SVG_CHECK}</span>`;
+        row.addEventListener('click', () => {
+            if (pickerSelected.has(list.id)) pickerSelected.delete(list.id);
+            else pickerSelected.add(list.id);
+            renderListPicker();
+        });
+        container.appendChild(row);
+    });
+}
+
+function closeListPicker() {
+    document.getElementById('listPickerWrap').classList.add('hidden');
+    pickerTicker = null;
+    pickerSelected = new Set();
+}
+
+async function submitListPicker() {
+    const email = getCurrentUserEmail();
+    const ticker = pickerTicker;
+    if (!email || !ticker) { closeListPicker(); return; }
+
+    const ids = Array.from(pickerSelected);
+    // 目前清單「之前」與「之後」的歸屬狀態不同，才需要重載列表
+    // （只看最終狀態會漏掉「原本在目前清單、被取消勾選但仍留在其他清單」這種情況）
+    const affectsCurrent = pickerOriginal.has(currentWatchlistId) !== ids.includes(currentWatchlistId);
+    closeListPicker();
+
+    try {
+        const response = await fetch('/watchlist/memberships', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_email: email, ticker: ticker, watchlist_ids: ids }),
+        });
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || '更新歸屬失敗');
+        }
+
+        await refreshWatchlistCounts();
+        // 影響到目前清單才需要重載股票列表
+        if (affectsCurrent || !ids.length) await loadCurrentWatchlistStocks();
+
+        showToast(ids.length ? '已加入 ' + ids.length + ' 個清單' : '已從所有清單移除');
+    } catch (error) {
+        showToast(error.message);
+    }
+}

@@ -582,36 +582,6 @@ async function removeStock(ticker) {
     }
 }
 
-async function addToWatchlist(ticker) {
-    try {
-        if (stocks.some(s => s.ticker === ticker)) {
-            throw new Error('此股票已在清單中');
-        }
-
-        const userInfo = JSON.parse(localStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
-
-        const response = await fetch('/watchlist/add?ticker=' + ticker + '&user_email=' + userInfo.email, { method: 'POST' });
-        if (!response.ok) throw new Error('新增股票失敗');
-
-        const stockResponse = await fetch('/stockprice/' + ticker);
-        if (!stockResponse.ok) throw new Error('取得股票資訊失敗');
-        const stockData = await stockResponse.json();
-
-        stocks.push(stockData);
-        renderSettingsStockList();
-        renderStocks();
-
-        document.getElementById('searchResults').classList.add('hidden');
-        document.getElementById('searchInput').value = '';
-    } catch (error) {
-        console.error('新增股票時發生錯誤:', error);
-        showToast(error.message);
-        document.getElementById('searchInput').value = '';
-        document.getElementById('searchResults').classList.add('hidden');
-    }
-}
-
 
 /* ═══════ TOUCH DRAG ═══════ */
 
@@ -967,7 +937,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 results.forEach(stock => {
                     const item = document.createElement('div');
                     item.className = 'search-result-item';
-                    item.onclick = () => addToWatchlist(stock.symbol);
+                    item.onclick = () => {
+                        document.getElementById('searchResults').classList.add('hidden');
+                        document.getElementById('searchInput').value = '';
+                        openListPicker(stock.symbol);
+                    };
                     item.innerHTML = `
                         <div class="search-result-tile" style="background:${getTileGradient(stock.symbol)}">${stock.symbol[0]}</div>
                         <div class="search-result-info">
