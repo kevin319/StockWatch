@@ -79,11 +79,15 @@ def _db_list_watchlists(user_email: str) -> list:
         if rows:
             return rows
 
-        cur.execute(
-            """INSERT INTO watchlists (user_email, name, display_order)
-               VALUES (%s, %s, 0)""",
-            (user_email, DEFAULT_WATCHLIST_NAME),
-        )
+        try:
+            cur.execute(
+                """INSERT INTO watchlists (user_email, name, display_order)
+                   VALUES (%s, %s, 0)""",
+                (user_email, DEFAULT_WATCHLIST_NAME),
+            )
+        except psycopg2.errors.ForeignKeyViolation:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="找不到使用者")
         conn.commit()
         cur.execute(_LIST_SQL, (user_email,))
         return [dict(r) for r in cur.fetchall()]
@@ -308,17 +312,16 @@ def _db_set_memberships(user_email: str, ticker: str, watchlist_ids: list) -> No
             )
 
         # 加入勾選但還沒有的（display_order 接在該清單末端）
+        # ON CONFLICT DO NOTHING 讓重複插入原子化地略過，避免併發重複提交時
+        # 因 idx_unique_watchlist_ticker 撞號而丟出未捕捉的 UniqueViolation
         for watchlist_id in watchlist_ids:
             cur.execute(
                 """INSERT INTO watchlist_stocks (user_email, watchlist_id, ticker, display_order)
                    SELECT %s, %s, %s,
                           COALESCE((SELECT MAX(display_order) + 1 FROM watchlist_stocks
                                     WHERE watchlist_id = %s), 0)
-                   WHERE NOT EXISTS (
-                       SELECT 1 FROM watchlist_stocks
-                       WHERE watchlist_id = %s AND ticker = %s
-                   )""",
-                (user_email, watchlist_id, ticker, watchlist_id, watchlist_id, ticker),
+                   ON CONFLICT (watchlist_id, ticker) DO NOTHING""",
+                (user_email, watchlist_id, ticker, watchlist_id),
             )
         conn.commit()
     finally:

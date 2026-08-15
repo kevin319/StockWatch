@@ -169,6 +169,7 @@ async function saveWatchlistOrder() {
         });
     } catch (error) {
         console.error('更新清單順序時發生錯誤:', error);
+        showToast('更新清單順序失敗，請稍後再試');
     }
 }
 
@@ -201,7 +202,7 @@ function startRenameWatchlist(id) {
     input.addEventListener('blur', commit);
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') commit();
-        if (e.key === 'Escape') { done = true; renderWatchlistDrawer(); }
+        if (e.key === 'Escape') { e.stopPropagation(); done = true; renderWatchlistDrawer(); }
     });
 }
 
@@ -270,7 +271,7 @@ function showNewWatchlistForm() {
 
     input.onkeydown = (e) => {
         if (e.key === 'Enter') createWatchlist(input.value.trim());
-        if (e.key === 'Escape') hideNewWatchlistForm();
+        if (e.key === 'Escape') { e.stopPropagation(); hideNewWatchlistForm(); }
     };
 }
 
@@ -303,13 +304,28 @@ async function createWatchlist(name) {
 /* ─── 計數同步 ─── */
 
 // 歸屬變動後重抓計數（不動 currentWatchlistId）
+// 只更新既有清單的 count，不整批取代陣列：避免蓋掉可能還在進行中的
+// 拖曳排序（POST /watchlists/reorder 尚未回來時，本地順序才是最新的）
 async function refreshWatchlistCounts() {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
         const response = await fetch('/watchlists/' + encodeURIComponent(email));
         if (!response.ok) return;
-        watchlists = await response.json();
+        const serverLists = await response.json();
+        const serverById = new Map(serverLists.map(w => [w.id, w]));
+
+        // 更新既有清單的 count；伺服器已不存在的清單一併移除
+        watchlists = watchlists
+            .filter(w => serverById.has(w.id))
+            .map(w => ({ ...w, count: serverById.get(w.id).count }));
+
+        // 補上本地還不知道的新清單（接在後面，不影響既有順序）
+        const knownIds = new Set(watchlists.map(w => w.id));
+        serverLists.forEach(w => {
+            if (!knownIds.has(w.id)) watchlists.push(w);
+        });
+
         updateNavWatchlistName();
     } catch (error) {
         console.error('更新清單計數時發生錯誤:', error);
