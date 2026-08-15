@@ -275,8 +275,8 @@ function renderStocks() {
         stockList.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">${SVG_EMPTY}</div>
-                <div class="empty-state-title">尚未追蹤任何股票</div>
-                <div class="empty-state-desc">使用下方搜尋列新增股票到自選清單</div>
+                <div class="empty-state-title">這個清單還沒有股票</div>
+                <div class="empty-state-desc">使用下方搜尋列加入股票</div>
             </div>`;
         document.getElementById('stockListCard').style.display = '';
         updateHeroCaption();
@@ -510,6 +510,10 @@ function renderSettingsStockList() {
     if (!container) return;
     container.innerHTML = '';
 
+    const titleEl = document.getElementById('settingsListTitle');
+    const current = typeof getCurrentWatchlist === 'function' ? getCurrentWatchlist() : null;
+    if (titleEl) titleEl.textContent = current ? current.name : '自選股';
+
     stocks.forEach((stock, index) => {
         const row = document.createElement('div');
         row.className = 'settings-row';
@@ -558,7 +562,11 @@ async function removeStock(ticker) {
         const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
-        const response = await fetch('/watchlist/' + userInfo.email + '/' + ticker, { method: 'DELETE' });
+        const response = await fetch(
+            '/watchlists/' + currentWatchlistId + '/stocks/' + encodeURIComponent(ticker)
+            + '?user_email=' + encodeURIComponent(userInfo.email),
+            { method: 'DELETE' }
+        );
         if (!response.ok) throw new Error('移除股票失敗');
 
         const idx = stocks.findIndex(s => s.ticker === ticker);
@@ -566,6 +574,8 @@ async function removeStock(ticker) {
             stocks.splice(idx, 1);
             renderSettingsStockList();
             renderStocks();
+            const list = watchlists.find(w => w.id === currentWatchlistId);
+            if (list) list.count = stocks.length;
         }
     } catch (error) {
         console.error('移除股票時發生錯誤:', error);
@@ -788,7 +798,7 @@ async function updateStockOrder() {
         const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) return;
 
-        await fetch('/watchlist/reorder', {
+        await fetch('/watchlists/' + currentWatchlistId + '/reorder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_email: userInfo.email, tickers: stocks.map(s => s.ticker) })
@@ -886,23 +896,32 @@ function updateLastUpdateTime() {
 
 /* ═══════ INIT ═══════ */
 
+// 抓目前清單的股票並重繪（切換清單、初始化都走這裡）
+async function loadCurrentWatchlistStocks() {
+    const email = getCurrentUserEmail();
+    if (!email || !currentWatchlistId) { stocks = []; renderStocks(); return; }
+
+    expandedTicker = null;   // 換清單時收合展開中的個股
+    renderSkeleton();
+
+    const response = await fetch(
+        '/watchlists/' + currentWatchlistId + '/stocks?user_email=' + encodeURIComponent(email)
+    );
+    if (!response.ok) throw new Error('獲取股票數據失敗');
+
+    stocks = await response.json();
+    renderStocks();
+    renderSettingsStockList();
+    updateStockPrices();
+    schedulePoll();
+    updateLastUpdateTime();
+}
+
 async function initializeStocks() {
     renderSkeleton(); // 資料抵達前先顯示骨架
     try {
-        const userInfo = JSON.parse(localStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
-
-        const response = await fetch('/watchlist/' + userInfo.email);
-        if (!response.ok) throw new Error('獲取股票數據失敗');
-
-        const data = await response.json();
-        stocks = Array.isArray(data) ? data : initStockData();
-
-        renderStocks();
-        renderSettingsStockList();
-        updateStockPrices();
-        schedulePoll();
-        updateLastUpdateTime();
+        await loadWatchlists();
+        await loadCurrentWatchlistStocks();
     } catch (error) {
         console.error('初始化股票數據時發生錯誤:', error);
         stocks = initStockData();
@@ -965,6 +984,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!e.target.closest('#searchInput') && !e.target.closest('#searchResults') && !e.target.closest('.search-field')) {
             searchResults.classList.add('hidden');
         }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeWatchlistDrawer();
     });
 });
 
