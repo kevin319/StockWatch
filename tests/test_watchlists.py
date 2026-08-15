@@ -218,5 +218,31 @@ class TestWatchlistStocks(unittest.TestCase):
         self.assertEqual([r_["ticker"] for r_ in rows], ["NVDA", "AAPL", "MSFT"])
 
 
+class TestLegacyEndpointsRemoved(unittest.TestCase):
+    """舊的單一清單端點已移除，避免與新的清單端點語意衝突。"""
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def _route_paths(self):
+        # 這個 FastAPI 版本的 include_router 是 lazy 解析（_IncludedRouter
+        # wrapper），app.routes 內巢狀路由的 .path 不會直接攤平，故改用
+        # app.openapi() 產生的 schema 取得攤平後的實際路徑集合。
+        return set(app.openapi()["paths"].keys())
+
+    def test_legacy_routes_gone(self):
+        paths = self._route_paths()
+        self.assertNotIn("/watchlist/{user_email}", paths)
+        self.assertNotIn("/watchlist/add", paths)
+        self.assertNotIn("/watchlist/{user_email}/{ticker}", paths)
+        self.assertNotIn("/watchlist/reorder", paths)
+
+    def test_new_routes_present(self):
+        paths = self._route_paths()
+        self.assertIn("/watchlists/{user_email}", paths)
+        self.assertIn("/watchlists/{watchlist_id}/stocks", paths)
+        self.assertIn("/watchlist/memberships", paths)
+
+
 if __name__ == "__main__":
     unittest.main()

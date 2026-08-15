@@ -6,7 +6,7 @@
 import unittest
 
 from app.models.db import get_db_connection
-from app.models.migrations import ensure_watchlist_groups, DEFAULT_WATCHLIST_NAME
+from app.models.migrations import ensure_watchlist_groups
 
 TEST_EMAIL = "migration-test@example.com"
 
@@ -82,17 +82,22 @@ class TestWatchlistGroupsMigration(unittest.TestCase):
         )[0][0]
         self.assertEqual(orphans, 0)
 
-    def test_existing_users_got_default_list(self):
-        """遷移前就有自選股的使用者，都拿到一個名為「自選股」的清單。"""
+    def test_every_stock_owner_has_at_least_one_list(self):
+        """每個持有自選股的使用者至少有一個清單。
+
+        這是遷移保證的持久不變量（NOT NULL 外鍵 + 遷移本身），且不會被
+        清單改名破壞——不同於「清單名稱為自選股」，後者只在新使用者首次
+        建立時成立，使用者事後可自由改名（見 Task 6），因此不適合在這裡
+        斷言字面名稱。「自選股」這個預設名稱由
+        tests/test_watchlists.py::test_get_creates_default_list_for_new_user
+        對自建的 fixture 使用者驗證。"""
         missing = _query(
             """SELECT COUNT(*) FROM (
                    SELECT DISTINCT user_email FROM watchlist_stocks
                ) u
                WHERE NOT EXISTS (
-                   SELECT 1 FROM watchlists w
-                   WHERE w.user_email = u.user_email AND w.name = %s
-               )""",
-            (DEFAULT_WATCHLIST_NAME,),
+                   SELECT 1 FROM watchlists w WHERE w.user_email = u.user_email
+               )"""
         )[0][0]
         self.assertEqual(missing, 0)
 
