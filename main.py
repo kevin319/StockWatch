@@ -119,6 +119,33 @@ async def add_no_cache_header(request, call_next):
 # 設定安全性
 security = HTTPBearer()
 
+
+def _compute_asset_version() -> str:
+    """以前端靜態檔內容算出版本雜湊，供前端偵測自己是不是舊版。
+
+    容器內的檔案在執行期不會變，啟動時算一次即可。手動維護版號容易忘記，
+    改用內容雜湊就不會有「改了程式卻忘了改版號」的問題。
+    """
+    import hashlib
+    h = hashlib.sha256()
+    for name in ("static/index.html", "static/main.js", "static/watchlists.js"):
+        try:
+            with open(name, "rb") as f:
+                h.update(f.read())
+        except OSError as e:
+            logger.error(f"計算資產版本時讀不到 {name}: {e}")
+    return h.hexdigest()[:12]
+
+
+ASSET_VERSION = _compute_asset_version()
+
+
+@app.get("/version")
+async def get_version():
+    """公開端點（不需登入）：前端用來比對自己載入的是不是最新版前端。"""
+    return {"version": ASSET_VERSION}
+
+
 # 註冊路由
 app.include_router(auth.router, tags=["auth"])
 app.include_router(stock.router, tags=["stock"])

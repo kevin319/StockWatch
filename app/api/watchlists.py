@@ -1,17 +1,21 @@
 """自選股清單（分組）相關端點。
 
-本模組用 HTTPException 回傳狀態碼（400/404），前端據此分辨錯誤類型；
+本模組用 HTTPException 回傳狀態碼（400/401/404），前端據此分辨錯誤類型；
 這與 stock.py 既有的「回 {"error": ...}」寫法不同，是刻意為之。
+
+所有端點都需要登入，且使用者身分一律取自 current_user_email（驗證過的 JWT）——
+請求本身不再帶 user_email，避免持有效 token 者填別人的 email 存取資料。
 """
 import asyncio
 import logging
 
 import psycopg2
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel
 from typing import List
 
+from app.core.security import current_user_email
 from app.models.db import get_db_connection
 from app.models.migrations import DEFAULT_WATCHLIST_NAME
 
@@ -23,17 +27,14 @@ NAME_MAX_LEN = 50
 
 
 class CreateWatchlistRequest(BaseModel):
-    user_email: str
     name: str
 
 
 class RenameWatchlistRequest(BaseModel):
-    user_email: str
     name: str
 
 
 class ReorderWatchlistsRequest(BaseModel):
-    user_email: str
     ids: List[int]
 
 
@@ -189,45 +190,56 @@ def _db_reorder_watchlists(user_email: str, ids: list) -> None:
         conn.close()
 
 
-@router.get("/watchlists/{user_email}")
-async def list_watchlists(user_email: str):
+@router.get("/watchlists")
+async def list_watchlists(user_email: str = Depends(current_user_email)):
     return await asyncio.to_thread(_db_list_watchlists, user_email)
 
 
 @router.post("/watchlists")
-async def create_watchlist(request: CreateWatchlistRequest):
+async def create_watchlist(
+    request: CreateWatchlistRequest,
+    user_email: str = Depends(current_user_email),
+):
     name = _clean_name(request.name)
-    return await asyncio.to_thread(_db_create_watchlist, request.user_email, name)
+    return await asyncio.to_thread(_db_create_watchlist, user_email, name)
 
 
 @router.patch("/watchlists/{watchlist_id}")
-async def rename_watchlist(watchlist_id: int, request: RenameWatchlistRequest):
+async def rename_watchlist(
+    watchlist_id: int,
+    request: RenameWatchlistRequest,
+    user_email: str = Depends(current_user_email),
+):
     name = _clean_name(request.name)
     return await asyncio.to_thread(
-        _db_rename_watchlist, request.user_email, watchlist_id, name
+        _db_rename_watchlist, user_email, watchlist_id, name
     )
 
 
 @router.delete("/watchlists/{watchlist_id}")
-async def delete_watchlist(watchlist_id: int, user_email: str):
+async def delete_watchlist(
+    watchlist_id: int,
+    user_email: str = Depends(current_user_email),
+):
     await asyncio.to_thread(_db_delete_watchlist, user_email, watchlist_id)
     return {"message": "已刪除清單"}
 
 
 @router.post("/watchlists/reorder")
-async def reorder_watchlists(request: ReorderWatchlistsRequest):
-    await asyncio.to_thread(_db_reorder_watchlists, request.user_email, request.ids)
+async def reorder_watchlists(
+    request: ReorderWatchlistsRequest,
+    user_email: str = Depends(current_user_email),
+):
+    await asyncio.to_thread(_db_reorder_watchlists, user_email, request.ids)
     return {"message": "已更新清單順序"}
 
 
 class MembershipsRequest(BaseModel):
-    user_email: str
     ticker: str
     watchlist_ids: List[int]
 
 
 class ReorderStocksRequest(BaseModel):
-    user_email: str
     tickers: List[str]
 
 
@@ -363,32 +375,49 @@ def _db_reorder_stocks(user_email: str, watchlist_id: int, tickers: list) -> Non
 
 
 @router.get("/watchlists/{watchlist_id}/stocks")
-async def get_watchlist_stocks(watchlist_id: int, user_email: str):
+async def get_watchlist_stocks(
+    watchlist_id: int,
+    user_email: str = Depends(current_user_email),
+):
     return await asyncio.to_thread(_db_fetch_watchlist_stocks, user_email, watchlist_id)
 
 
-@router.get("/watchlist/memberships/{user_email}/{ticker}")
-async def get_memberships(user_email: str, ticker: str):
+@router.get("/watchlist/memberships/{ticker}")
+async def get_memberships(
+    ticker: str,
+    user_email: str = Depends(current_user_email),
+):
     return await asyncio.to_thread(_db_fetch_memberships, user_email, ticker)
 
 
 @router.put("/watchlist/memberships")
-async def set_memberships(request: MembershipsRequest):
+async def set_memberships(
+    request: MembershipsRequest,
+    user_email: str = Depends(current_user_email),
+):
     await asyncio.to_thread(
-        _db_set_memberships, request.user_email, request.ticker, request.watchlist_ids
+        _db_set_memberships, user_email, request.ticker, request.watchlist_ids
     )
     return {"message": "已更新歸屬"}
 
 
 @router.delete("/watchlists/{watchlist_id}/stocks/{ticker}")
-async def remove_stock(watchlist_id: int, ticker: str, user_email: str):
+async def remove_stock(
+    watchlist_id: int,
+    ticker: str,
+    user_email: str = Depends(current_user_email),
+):
     await asyncio.to_thread(_db_remove_stock, user_email, watchlist_id, ticker)
     return {"message": "已從清單移除"}
 
 
 @router.post("/watchlists/{watchlist_id}/reorder")
-async def reorder_stocks(watchlist_id: int, request: ReorderStocksRequest):
+async def reorder_stocks(
+    watchlist_id: int,
+    request: ReorderStocksRequest,
+    user_email: str = Depends(current_user_email),
+):
     await asyncio.to_thread(
-        _db_reorder_stocks, request.user_email, watchlist_id, request.tickers
+        _db_reorder_stocks, user_email, watchlist_id, request.tickers
     )
     return {"message": "已更新股票順序"}

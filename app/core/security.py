@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.config import settings
 
 def create_access_token(data: dict):
@@ -10,28 +11,33 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = None):
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="未提供認證憑證"
-        )
+
+# auto_error=False：缺少 header 時交由下方統一回 401，訊息才一致
+_bearer = HTTPBearer(auto_error=False)
+
+
+async def current_user_email(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> str:
+    """從 Authorization: Bearer <token> 取出並驗證登入者 email。
+
+    這是所有需要登入的端點的唯一身分來源——email 一律由驗證過的 token 推導，
+    絕不接受呼叫端自行帶入，否則任何持有效 token 的人都能填別人的 email 讀寫資料。
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="請先登入")
+
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(
-                status_code=401,
-                detail="無效的認證憑證"
-            )
-        return email
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="認證憑證已過期"
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
         )
     except JWTError:
-        raise HTTPException(
-            status_code=401,
-            detail="無法驗證認證憑證"
-        )
+        # 過期與簽章錯誤都歸在這裡：對前端而言處理方式相同（回登入頁）
+        raise HTTPException(status_code=401, detail="登入憑證無效或已過期")
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(status_code=401, detail="登入憑證無效")
+    return email

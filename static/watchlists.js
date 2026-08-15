@@ -22,7 +22,7 @@ async function loadWatchlists() {
     const email = getCurrentUserEmail();
     if (!email) throw new Error('找不到使用者資訊');
 
-    const response = await fetch('/watchlists/' + encodeURIComponent(email));
+    const response = await authFetch('/watchlists');
     if (!response.ok) throw new Error('取得清單失敗');
     watchlists = await response.json();
 
@@ -162,10 +162,10 @@ async function saveWatchlistOrder() {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
-        await fetch('/watchlists/reorder', {
+        await authFetch('/watchlists/reorder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_email: email, ids: watchlists.map(w => w.id) }),
+            body: JSON.stringify({ ids: watchlists.map(w => w.id) }),
         });
     } catch (error) {
         console.error('更新清單順序時發生錯誤:', error);
@@ -210,10 +210,10 @@ async function renameWatchlist(id, name) {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
-        const response = await fetch('/watchlists/' + id, {
+        const response = await authFetch('/watchlists/' + id, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_email: email, name: name }),
+            body: JSON.stringify({ name: name }),
         });
         if (!response.ok) {
             const body = await response.json().catch(() => ({}));
@@ -235,10 +235,7 @@ async function deleteWatchlist(id) {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
-        const response = await fetch(
-            '/watchlists/' + id + '?user_email=' + encodeURIComponent(email),
-            { method: 'DELETE' }
-        );
+        const response = await authFetch('/watchlists/' + id, { method: 'DELETE' });
         if (!response.ok) {
             const body = await response.json().catch(() => ({}));
             throw new Error(body.detail || '刪除失敗');
@@ -284,10 +281,10 @@ async function createWatchlist(name) {
     const email = getCurrentUserEmail();
     if (!email || !name) return;
     try {
-        const response = await fetch('/watchlists', {
+        const response = await authFetch('/watchlists', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_email: email, name: name }),
+            body: JSON.stringify({ name: name }),
         });
         if (!response.ok) {
             const body = await response.json().catch(() => ({}));
@@ -310,7 +307,7 @@ async function refreshWatchlistCounts() {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
-        const response = await fetch('/watchlists/' + encodeURIComponent(email));
+        const response = await authFetch('/watchlists');
         if (!response.ok) return;
         const serverLists = await response.json();
         const serverById = new Map(serverLists.map(w => [w.id, w]));
@@ -349,8 +346,8 @@ async function openListPicker(ticker) {
     pickerSelected = new Set();
 
     try {
-        const response = await fetch(
-            '/watchlist/memberships/' + encodeURIComponent(email) + '/' + encodeURIComponent(ticker)
+        const response = await authFetch(
+            '/watchlist/memberships/' + encodeURIComponent(ticker)
         );
         if (response.ok) {
             (await response.json()).forEach(id => pickerSelected.add(id));
@@ -408,10 +405,10 @@ async function submitListPicker() {
     closeListPicker();
 
     try {
-        const response = await fetch('/watchlist/memberships', {
+        const response = await authFetch('/watchlist/memberships', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_email: email, ticker: ticker, watchlist_ids: ids }),
+            body: JSON.stringify({ ticker: ticker, watchlist_ids: ids }),
         });
         if (!response.ok) {
             const body = await response.json().catch(() => ({}));

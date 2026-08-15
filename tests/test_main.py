@@ -56,8 +56,18 @@ class TestMain(unittest.TestCase):
         self.assertNotIn("/api/chat", app.openapi()["paths"])
 
     def test_stock_endpoints(self):
-        """Test stock endpoint returns JSON with ticker field"""
-        response = self.client.get("/stock/AAPL")
+        """行情端點需登入；帶有效 token 才拿得到資料。"""
+        from datetime import datetime, timedelta, timezone
+        from jose import jwt
+        from app.core.config import settings
+
+        self.assertEqual(self.client.get("/stock/AAPL").status_code, 401)
+
+        claims = {"sub": "test@example.com",
+                  "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
+        token = jwt.encode(claims, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+        response = self.client.get("/stock/AAPL",
+                                   headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue("ticker" in data or "error" in data)

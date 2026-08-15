@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import asyncio
 import yfinance as yf
 import yahooquery as yq
@@ -6,6 +6,7 @@ from app.models.db import get_db_connection
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 from app.core.config import settings
+from app.core.security import current_user_email
 from app.api.providers.finnhub import fetch_finnhub_quote
 from app.api.providers.twse import fetch_twse_quote
 from app.api.providers.astock import fetch_astock_quote
@@ -113,7 +114,7 @@ def _db_upsert_stock_price(data: dict) -> None:
 
 
 @router.get("/stockprice/{ticker}")
-async def get_stock_price(ticker: str):
+async def get_stock_price(ticker: str, _: str = Depends(current_user_email)):
     try:
         current_time = datetime.now()
         
@@ -271,7 +272,7 @@ def _yf_ticker(ticker: str) -> str:
 
 
 @router.get("/sparkline/{ticker}")
-async def get_sparkline(ticker: str):
+async def get_sparkline(ticker: str, _: str = Depends(current_user_email)):
     """回傳近一個月日收盤序列，供前端畫迷你走勢圖。全市場通用，快取 30 分鐘。"""
     try:
         now = datetime.now()
@@ -292,7 +293,7 @@ async def get_sparkline(ticker: str):
 
 
 @router.get("/fundamentals/{ticker}")
-async def get_fundamentals(ticker: str):
+async def get_fundamentals(ticker: str, _: str = Depends(current_user_email)):
     """回傳基本面指標供股票列展開時顯示。全市場通用，快取 6 小時。缺值回 null。"""
     try:
         now = datetime.now()
@@ -325,7 +326,7 @@ async def get_fundamentals(ticker: str):
 
 
 @router.get("/stock/{ticker}")
-async def get_stock(ticker: str):
+async def get_stock(ticker: str, _: str = Depends(current_user_email)):
     try:
         info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
 
@@ -393,7 +394,7 @@ _EXCHANGE_NAMES = {
 
 
 @router.get("/autocomplete/{query}")
-async def autocomplete(query: str):
+async def autocomplete(query: str, _: str = Depends(current_user_email)):
     try:
         # 使用 yahooquery 搜尋股票
         search = await asyncio.to_thread(yq.search, query)
@@ -645,7 +646,7 @@ async def generate_stock_summary(ticker: str) -> str:
 
 
 @router.get("/ai-summary/{ticker}")
-async def get_ai_summary(ticker: str):
+async def get_ai_summary(ticker: str, _: str = Depends(current_user_email)):
     """回傳 AI 股票摘要。25 小時內有快取則直接回，否則即時產生。絕不丟 500。"""
     try:
         # 先看快取

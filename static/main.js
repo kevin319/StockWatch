@@ -1,3 +1,46 @@
+/* ═══════ 認證後的 API 呼叫 ═══════ */
+
+// 所有需要登入的後端呼叫都走這裡：自動帶上 Bearer token；
+// 收到 401 就代表憑證失效，直接登出回登入頁，不讓畫面停在半殘狀態。
+async function authFetch(url, options) {
+    options = options || {};
+    const token = localStorage.getItem('access_token');
+    const headers = Object.assign({}, options.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const response = await fetch(url, Object.assign({}, options, { headers: headers }));
+    if (response.status === 401) {
+        logout(); // 定義於 index.html：清 localStorage 並導回登入頁
+        throw new Error('登入已過期，請重新登入');
+    }
+    return response;
+}
+
+
+/* ═══════ 前端版本檢查 ═══════ */
+
+// 分頁長時間開著時，後端可能已經換版；舊前端會去打已經不存在的端點而失敗。
+// 載入時記下版本，之後每次輪詢比對一次，不一致就自動重載拿新版。
+let loadedAssetVersion = null;
+
+async function checkAssetVersion() {
+    try {
+        const response = await fetch('/version', { cache: 'no-store' });
+        if (!response.ok) return;
+        const { version } = await response.json();
+        if (!version) return;
+
+        if (loadedAssetVersion === null) {
+            loadedAssetVersion = version;
+        } else if (version !== loadedAssetVersion) {
+            location.reload();
+        }
+    } catch (e) {
+        // 網路暫時不通就跳過，下次輪詢再比
+    }
+}
+
+
 /* ═══════ THEME ═══════ */
 
 function loadTheme() {
@@ -80,16 +123,6 @@ let fundData = {};            // ticker -> 基本面資料 / 'loading'
 let summaryData = {};         // ticker -> AI 摘要文字 / 'loading'
 let expandAnimate = false;    // 一次性：本次重繪是否播放展開動畫
 let chatContext = null;       // 從股票開啟聊天時的脈絡 {ticker, summary}；一般聊天為 null
-
-function initStockData() {
-    stocks = [
-        { ticker: 'CWEB', company_name: 'Direxion Daily CSI China Internet Bull 2X', price: 43.63, prev_close: 44.50, price_change: -0.87, price_change_percent: -1.96, market_state: 'REGULAR', extended_price: 40.90, extended_type: 'PRE_MARKET', extended_change: -2.73, extended_change_percent: -6.25 },
-        { ticker: 'PLTR', company_name: 'Palantir Technologies Inc.', price: 24.77, prev_close: 25.20, price_change: -0.43, price_change_percent: -1.71, market_state: 'REGULAR', extended_price: 0, extended_type: '', extended_change: 0, extended_change_percent: 0 },
-        { ticker: '2330.TW', company_name: '台灣積體電路製造股份有限公司', price: 2390.0, prev_close: 2340.0, price_change: 50.0, price_change_percent: 2.14, market_state: 'REGULAR', extended_price: 0, extended_type: '', extended_change: 0, extended_change_percent: 0 },
-    ];
-    return stocks;
-}
-
 
 /* ═══════ UI TOGGLES ═══════ */
 
@@ -380,7 +413,7 @@ function collapseDetail() {
 async function loadFundamentals(ticker) {
     fundData[ticker] = 'loading';
     try {
-        const res = await fetch('/fundamentals/' + ticker);
+        const res = await authFetch('/fundamentals/' + ticker);
         fundData[ticker] = await res.json();
     } catch {
         fundData[ticker] = { error: true };
@@ -398,7 +431,7 @@ async function loadFundamentals(ticker) {
 async function loadSummary(ticker) {
     summaryData[ticker] = 'loading';
     try {
-        const res = await fetch('/ai-summary/' + ticker);
+        const res = await authFetch('/ai-summary/' + ticker);
         const data = await res.json();
         summaryData[ticker] = data.summary || '';
     } catch {
@@ -575,9 +608,8 @@ async function removeStock(ticker) {
         const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
 
-        const response = await fetch(
-            '/watchlists/' + currentWatchlistId + '/stocks/' + encodeURIComponent(ticker)
-            + '?user_email=' + encodeURIComponent(userInfo.email),
+        const response = await authFetch(
+            '/watchlists/' + currentWatchlistId + '/stocks/' + encodeURIComponent(ticker),
             { method: 'DELETE' }
         );
         if (!response.ok) throw new Error('移除股票失敗');
@@ -781,10 +813,10 @@ async function updateStockOrder() {
         const userInfo = JSON.parse(localStorage.getItem('user_info'));
         if (!userInfo || !userInfo.email) return;
 
-        await fetch('/watchlists/' + currentWatchlistId + '/reorder', {
+        await authFetch('/watchlists/' + currentWatchlistId + '/reorder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_email: userInfo.email, tickers: stocks.map(s => s.ticker) })
+            body: JSON.stringify({ tickers: stocks.map(s => s.ticker) })
         });
     } catch (error) {
         console.error('更新股票順序時發生錯誤:', error);
@@ -796,7 +828,7 @@ async function updateStockOrder() {
 
 async function fetchStockPrice(ticker) {
     try {
-        const response = await fetch('/stockprice/' + ticker);
+        const response = await authFetch('/stockprice/' + ticker);
         const data = await response.json();
         return data.error ? null : data;
     } catch (error) {
@@ -832,7 +864,7 @@ async function updateStockPrices() {
 
         const updated = await Promise.all(stocks.map(async (stock) => {
             try {
-                const response = await fetch('/stockprice/' + stock.ticker, { cache: 'no-store' });
+                const response = await authFetch('/stockprice/' + stock.ticker, { cache: 'no-store' });
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
                 if (data.error) return stock;
@@ -888,9 +920,7 @@ async function loadCurrentWatchlistStocks() {
     expandedTicker = null;   // 換清單時收合展開中的個股
     renderSkeleton();
 
-    const response = await fetch(
-        '/watchlists/' + requestedWatchlistId + '/stocks?user_email=' + encodeURIComponent(email)
-    );
+    const response = await authFetch('/watchlists/' + requestedWatchlistId + '/stocks');
     if (!response.ok) throw new Error('獲取股票數據失敗');
 
     const data = await response.json();
@@ -910,11 +940,30 @@ async function initializeStocks() {
         await loadWatchlists();
         await loadCurrentWatchlistStocks();
     } catch (error) {
+        // 看盤 App 絕不能在抓不到資料時拿寫死的假股價頂替——那比報錯危險得多，
+        // 使用者會把虛構的價格當成真的。載入失敗就明講，並提供重試。
         console.error('初始化股票數據時發生錯誤:', error);
-        stocks = initStockData();
-        renderStocks();
-        renderSettingsStockList();
+        stocks = [];
+        renderLoadError();
     }
+}
+
+// 載入失敗的明確狀態（取代過去偷偷塞 demo 資料的做法）
+function renderLoadError() {
+    const stockList = document.getElementById('stockList');
+    if (!stockList) return;
+    stockList.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-state-icon">${SVG_EMPTY}</div>
+            <div class="empty-state-title">載入失敗</div>
+            <div class="empty-state-desc">無法取得你的自選股資料</div>
+            <button class="pill-btn pill-btn-primary" style="margin-top:14px"
+                    onclick="initializeStocks()">重試</button>
+        </div>`;
+    const card = document.getElementById('stockListCard');
+    if (card) card.style.display = '';
+    const settingsList = document.getElementById('settingsStockList');
+    if (settingsList) settingsList.innerHTML = '';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -928,6 +977,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMarketClock();
     setInterval(renderMarketClock, 1000);
 
+    // 記下目前前端版本，之後每分鐘比對一次；後端換版就自動重載，避免舊分頁打到已移除的端點
+    checkAssetVersion();
+    setInterval(checkAssetVersion, 60000);
+
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
     let searchTimeout;
@@ -940,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         searchTimeout = setTimeout(async () => {
             try {
-                const response = await fetch('/autocomplete/' + encodeURIComponent(query));
+                const response = await authFetch('/autocomplete/' + encodeURIComponent(query));
                 if (!response.ok) throw new Error('搜尋失敗');
                 const results = await response.json();
 
