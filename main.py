@@ -10,6 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.api import auth, stock, chat, watchlists
 from app.models.db import get_db_connection
+from app.models.backup import run_backup
 from app.models.migrations import ensure_watchlist_groups
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,15 @@ async def _refresh_all_summaries() -> None:
             logger.error(f"排程產生摘要失敗: {ticker} {e}")
 
 
+async def _daily_backup() -> None:
+    """排程工作：每日資料庫備份。"""
+    import asyncio
+    try:
+        await asyncio.to_thread(run_backup)
+    except Exception as e:
+        logger.error(f"每日備份失敗: {e}")
+
+
 scheduler = AsyncIOScheduler()
 
 
@@ -71,12 +81,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"watchlist groups 遷移失敗: {e}")
 
+    # 啟動時先備份一次：確保隨時都有一份近期備份，設定錯誤也會立刻在 log 曝光
+    try:
+        await asyncio.to_thread(run_backup)
+    except Exception as e:
+        logger.error(f"啟動時備份失敗: {e}")
+
     # 啟動排程（失敗不可讓 app 崩潰）
     try:
         scheduler.add_job(
             _refresh_all_summaries,
             CronTrigger(hour=7, minute=0, timezone="Asia/Taipei"),
             id="daily_stock_summaries",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _daily_backup,
+            CronTrigger(hour=3, minute=0, timezone="Asia/Taipei"),
+            id="daily_backup",
             replace_existing=True,
         )
         scheduler.start()

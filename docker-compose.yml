@@ -29,8 +29,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      # 備份寫到 host，不能放在容器內或 db volume 內——那樣 volume 掛掉時備份會一起沒
+      - ./backups:/backups
     environment:
       - PORT=8000
+      - BACKUP_DIR=/backups
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
