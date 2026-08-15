@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.api import auth, stock, chat
+from app.api import auth, stock, chat, watchlists
 from app.models.db import get_db_connection
 from app.models.migrations import ensure_watchlist_groups
 
@@ -117,6 +117,7 @@ security = HTTPBearer()
 # 註冊路由
 app.include_router(auth.router, tags=["auth"])
 app.include_router(stock.router, tags=["stock"])
+app.include_router(watchlists.router, tags=["watchlists"])
 app.include_router(chat.router, tags=["chat"])
 
 if __name__ == "__main__":
