@@ -14,6 +14,11 @@ from app.models.migrations import ensure_watchlist_groups
 
 logger = logging.getLogger(__name__)
 
+# AI 對話暫不開放。整個 router 不註冊，端點才不會出現在公開的 /openapi.json 與 /docs；
+# 只在 handler 內擋是不夠的，路徑名稱仍會被列出來。
+# 要恢復請一併把 static/main.js 的 AI_CHAT_ENABLED 也改回 true。
+AI_CHAT_ENABLED = False
+
 
 def _ensure_summary_table() -> None:
     """建立 stock_summaries 表（idempotent）。同步操作，於 to_thread 內呼叫。"""
@@ -118,7 +123,8 @@ security = HTTPBearer()
 app.include_router(auth.router, tags=["auth"])
 app.include_router(stock.router, tags=["stock"])
 app.include_router(watchlists.router, tags=["watchlists"])
-app.include_router(chat.router, tags=["chat"])
+if AI_CHAT_ENABLED:
+    app.include_router(chat.router, tags=["chat"])
 
 if __name__ == "__main__":
     import uvicorn

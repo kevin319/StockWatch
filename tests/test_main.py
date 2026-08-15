@@ -46,11 +46,14 @@ class TestMain(unittest.TestCase):
         response = self.client.get('/verify_token?token=invalid')
         self.assertEqual(response.status_code, 401)
 
-    def test_chat_endpoint(self):
-        """Test chat API accepts requests"""
-        test_data = {"message": "test"}
-        response = self.client.post("/api/chat", json=test_data)
-        self.assertIn(response.status_code, [200, 400])
+    def test_chat_endpoint_disabled(self):
+        """AI 對話暫不開放：端點不註冊，打了回 404。"""
+        response = self.client.post("/api/chat", json={"message": "test"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_chat_endpoint_not_discoverable(self):
+        """/openapi.json 與 /docs 是公開的，端點不可出現在 schema 裡被列舉出來。"""
+        self.assertNotIn("/api/chat", app.openapi()["paths"])
 
     def test_stock_endpoints(self):
         """Test stock endpoint returns JSON with ticker field"""
