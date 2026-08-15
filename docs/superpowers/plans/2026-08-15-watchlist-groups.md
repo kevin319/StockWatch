@@ -18,6 +18,8 @@
 - **每位使用者永遠至少保留一個清單**；預設清單名稱常數 `DEFAULT_WATCHLIST_NAME = "自選股"`。
 - **清單名稱**長度 1–50 字，同一使用者不分大小寫不可同名。
 - **舊端點在最後一個 Task 才移除**，確保每個 Task 結束時 App 都是可用的。
+- **前端改動要驗證必須重建 image**：容器沒有掛載原始碼（Dockerfile 是 `COPY . .`），`docker compose restart` 會拿舊程式碼跑，給出假的通過。一律用 `docker compose up -d --build stockwatch`。
+- **實作直接在 `main` 分支進行**（已取得專案擁有者同意）。
 - **每個 Task 結束時提交一次 commit**，訊息用專案既有格式（`feat:` / `refactor:` / `experiment:`），並附：
   ```
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
@@ -1402,7 +1404,7 @@ Modify `static/main.js` 的 `renderSettingsStockList()`。把原本四行 `handl
 重啟容器後用 Playwright MCP 實測：
 
 ```bash
-docker compose restart stockwatch
+docker compose up -d --build stockwatch
 ```
 
 用 Playwright MCP：
@@ -1858,7 +1860,7 @@ Modify `static/main.js` 的 `DOMContentLoaded` handler，在既有的 `document.
 - [ ] **Step 9: 實機驗證**
 
 ```bash
-docker compose restart stockwatch
+docker compose up -d --build stockwatch
 ```
 
 用 Playwright MCP：
@@ -2249,7 +2251,7 @@ function closeWatchlistDrawer() {
 - [ ] **Step 6: 實機驗證**
 
 ```bash
-docker compose restart stockwatch
+docker compose up -d --build stockwatch
 ```
 
 用 Playwright MCP 逐項確認：
@@ -2551,7 +2553,7 @@ Modify `static/main.js`，把整個 `addToWatchlist(ticker)` 函式刪除（唯�
 - [ ] **Step 6: 實機驗證**
 
 ```bash
-docker compose restart stockwatch
+docker compose up -d --build stockwatch
 ```
 
 用 Playwright MCP：
@@ -2680,7 +2682,7 @@ POSTGRES_HOST=localhost .venv/bin/python -m unittest discover -s tests -v
 - [ ] **Step 6: 端到端回歸**
 
 ```bash
-docker compose restart stockwatch
+docker compose up -d --build stockwatch
 ```
 
 用 Playwright MCP 走一遍完整流程，確認移除舊端點沒有打破任何既有功能：
