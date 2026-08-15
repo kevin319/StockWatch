@@ -75,6 +75,7 @@ def ensure_watchlist_groups() -> None:
                    IF NOT EXISTS (
                        SELECT 1 FROM information_schema.table_constraints
                        WHERE constraint_name = 'fk_watchlist_stocks_watchlist'
+                         AND table_name = 'watchlist_stocks'
                    ) THEN
                        ALTER TABLE watchlist_stocks
                            ADD CONSTRAINT fk_watchlist_stocks_watchlist
