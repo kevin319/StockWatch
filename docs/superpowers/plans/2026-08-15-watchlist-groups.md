@@ -2037,7 +2037,7 @@ function renderWatchlistRow(list, index) {
     row.innerHTML = `
         <div class="drawer-row-bar"></div>
         <div class="drawer-row-name">${escapeHtml(list.name)}</div>
-        <div class="drawer-drag">${SVG_DRAG}</div>
+        <div class="drawer-drag drag-handle">${SVG_DRAG}</div>
         <button type="button" class="drawer-del" ${canDelete ? '' : 'disabled'}>${SVG_DELETE}</button>`;
 
     row.querySelector('.drawer-row-name').addEventListener('click', () => startRenameWatchlist(list.id));
@@ -2048,6 +2048,8 @@ function renderWatchlistRow(list, index) {
         if (canDelete) deleteWatchlist(list.id);
     });
 
+    // 把手必須帶 drag-handle 這個 class：handleTouchStart/handleMouseDown 內部是用
+    // e.target.closest('.drag-handle') 認把手的（Task 4 未把它參數化），少了就完全拖不動
     attachDragHandlers(row.querySelector('.drawer-drag'), {
         containerId: 'watchlistDrawerList',
         rowSelector: '.drawer-row',
