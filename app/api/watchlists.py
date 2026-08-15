@@ -110,8 +110,10 @@ def _db_create_watchlist(user_email: str, name: str) -> dict:
         row = dict(cur.fetchone())
         conn.commit()
         return row
-    except psycopg2.errors.UniqueViolation:
+    except psycopg2.errors.UniqueViolation as e:
         conn.rollback()
+        if e.diag.constraint_name != "idx_watchlists_user_name":
+            raise
         raise HTTPException(status_code=400, detail="清單名稱已存在")
     finally:
         cur.close()
@@ -125,16 +127,18 @@ def _db_rename_watchlist(user_email: str, watchlist_id: int, name: str) -> dict:
         _assert_owns(cur, user_email, watchlist_id)
         cur.execute(
             """UPDATE watchlists SET name = %s, updated_at = NOW()
-               WHERE id = %s
+               WHERE id = %s AND user_email = %s
                RETURNING id, name, display_order,
                    (SELECT COUNT(*) FROM watchlist_stocks ws WHERE ws.watchlist_id = %s) AS count""",
-            (name, watchlist_id, watchlist_id),
+            (name, watchlist_id, user_email, watchlist_id),
         )
         row = dict(cur.fetchone())
         conn.commit()
         return row
-    except psycopg2.errors.UniqueViolation:
+    except psycopg2.errors.UniqueViolation as e:
         conn.rollback()
+        if e.diag.constraint_name != "idx_watchlists_user_name":
+            raise
         raise HTTPException(status_code=400, detail="清單名稱已存在")
     finally:
         cur.close()
@@ -146,11 +150,19 @@ def _db_delete_watchlist(user_email: str, watchlist_id: int) -> None:
     cur = conn.cursor()
     try:
         _assert_owns(cur, user_email, watchlist_id)
-        cur.execute("SELECT COUNT(*) FROM watchlists WHERE user_email = %s", (user_email,))
+        # FOR UPDATE 鎖住該使用者所有清單列，避免兩個並發刪除同時讀到「還有兩個」
+        # 而雙雙通過檢查，導致清單被刪光（違反「至少保留一個」的不變量）。
+        cur.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM watchlists WHERE user_email = %s FOR UPDATE) t",
+            (user_email,),
+        )
         if cur.fetchone()[0] <= 1:
             raise HTTPException(status_code=400, detail="至少要保留一個清單")
         # watchlist_stocks 有 ON DELETE CASCADE，歸屬列會一併刪除
-        cur.execute("DELETE FROM watchlists WHERE id = %s", (watchlist_id,))
+        cur.execute(
+            "DELETE FROM watchlists WHERE id = %s AND user_email = %s",
+            (watchlist_id, user_email),
+        )
         conn.commit()
     finally:
         cur.close()
