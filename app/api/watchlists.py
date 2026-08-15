@@ -214,3 +214,178 @@ async def delete_watchlist(watchlist_id: int, user_email: str):
 async def reorder_watchlists(request: ReorderWatchlistsRequest):
     await asyncio.to_thread(_db_reorder_watchlists, request.user_email, request.ids)
     return {"message": "已更新清單順序"}
+
+
+class MembershipsRequest(BaseModel):
+    user_email: str
+    ticker: str
+    watchlist_ids: List[int]
+
+
+class ReorderStocksRequest(BaseModel):
+    user_email: str
+    tickers: List[str]
+
+
+# 與 stock.py 的 _WATCHLIST_SQL 同樣的欄位，只是改以 watchlist_id 篩選
+_STOCKS_SQL = """
+    SELECT
+        ws.ticker,
+        ws.display_order,
+        COALESCE(sp.price, 0) as price,
+        COALESCE(sp.prev_close, 0) as prev_close,
+        COALESCE(sp.price_change, 0) as price_change,
+        COALESCE(sp.price_change_percent, 0) as price_change_percent,
+        COALESCE(sp.market_state, '') as market_state,
+        COALESCE(sp.extended_price, 0) as extended_price,
+        COALESCE(sp.extended_type, '') as extended_type,
+        COALESCE(sp.extended_change, 0) as extended_change,
+        COALESCE(sp.extended_change_percent, 0) as extended_change_percent
+    FROM watchlist_stocks ws
+    LEFT JOIN stock_prices sp ON ws.ticker = sp.ticker
+    WHERE ws.watchlist_id = %s
+    ORDER BY ws.display_order;
+"""
+
+
+def _db_fetch_watchlist_stocks(user_email: str, watchlist_id: int) -> list:
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        _assert_owns(cur, user_email, watchlist_id)
+        cur.execute(_STOCKS_SQL, (watchlist_id,))
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_fetch_memberships(user_email: str, ticker: str) -> list:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT ws.watchlist_id
+               FROM watchlist_stocks ws
+               JOIN watchlists w ON w.id = ws.watchlist_id
+               WHERE w.user_email = %s AND ws.ticker = %s
+               ORDER BY w.display_order, w.id""",
+            (user_email, ticker),
+        )
+        return [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_set_memberships(user_email: str, ticker: str, watchlist_ids: list) -> None:
+    """全量覆蓋某 ticker 的歸屬：勾選的加入（接在清單末端）、未勾選的移除。"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        for watchlist_id in watchlist_ids:
+            _assert_owns(cur, user_email, watchlist_id)
+
+        # 移除未勾選的（限縮在該使用者自己的清單內）
+        if watchlist_ids:
+            cur.execute(
+                """DELETE FROM watchlist_stocks ws
+                   USING watchlists w
+                   WHERE ws.watchlist_id = w.id
+                     AND w.user_email = %s
+                     AND ws.ticker = %s
+                     AND NOT (ws.watchlist_id = ANY(%s))""",
+                (user_email, ticker, watchlist_ids),
+            )
+        else:
+            cur.execute(
+                """DELETE FROM watchlist_stocks ws
+                   USING watchlists w
+                   WHERE ws.watchlist_id = w.id
+                     AND w.user_email = %s
+                     AND ws.ticker = %s""",
+                (user_email, ticker),
+            )
+
+        # 加入勾選但還沒有的（display_order 接在該清單末端）
+        for watchlist_id in watchlist_ids:
+            cur.execute(
+                """INSERT INTO watchlist_stocks (user_email, watchlist_id, ticker, display_order)
+                   SELECT %s, %s, %s,
+                          COALESCE((SELECT MAX(display_order) + 1 FROM watchlist_stocks
+                                    WHERE watchlist_id = %s), 0)
+                   WHERE NOT EXISTS (
+                       SELECT 1 FROM watchlist_stocks
+                       WHERE watchlist_id = %s AND ticker = %s
+                   )""",
+                (user_email, watchlist_id, ticker, watchlist_id, watchlist_id, ticker),
+            )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_remove_stock(user_email: str, watchlist_id: int, ticker: str) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        _assert_owns(cur, user_email, watchlist_id)
+        cur.execute(
+            """DELETE FROM watchlist_stocks
+               WHERE watchlist_id = %s AND ticker = %s AND user_email = %s""",
+            (watchlist_id, ticker, user_email),
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _db_reorder_stocks(user_email: str, watchlist_id: int, tickers: list) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        _assert_owns(cur, user_email, watchlist_id)
+        for index, ticker in enumerate(tickers):
+            cur.execute(
+                """UPDATE watchlist_stocks SET display_order = %s, updated_at = NOW()
+                   WHERE watchlist_id = %s AND ticker = %s AND user_email = %s""",
+                (index, watchlist_id, ticker, user_email),
+            )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/watchlists/{watchlist_id}/stocks")
+async def get_watchlist_stocks(watchlist_id: int, user_email: str):
+    return await asyncio.to_thread(_db_fetch_watchlist_stocks, user_email, watchlist_id)
+
+
+@router.get("/watchlist/memberships/{user_email}/{ticker}")
+async def get_memberships(user_email: str, ticker: str):
+    return await asyncio.to_thread(_db_fetch_memberships, user_email, ticker)
+
+
+@router.put("/watchlist/memberships")
+async def set_memberships(request: MembershipsRequest):
+    await asyncio.to_thread(
+        _db_set_memberships, request.user_email, request.ticker, request.watchlist_ids
+    )
+    return {"message": "已更新歸屬"}
+
+
+@router.delete("/watchlists/{watchlist_id}/stocks/{ticker}")
+async def remove_stock(watchlist_id: int, ticker: str, user_email: str):
+    await asyncio.to_thread(_db_remove_stock, user_email, watchlist_id, ticker)
+    return {"message": "已從清單移除"}
+
+
+@router.post("/watchlists/{watchlist_id}/reorder")
+async def reorder_stocks(watchlist_id: int, request: ReorderStocksRequest):
+    await asyncio.to_thread(
+        _db_reorder_stocks, request.user_email, watchlist_id, request.tickers
+    )
+    return {"message": "已更新股票順序"}
