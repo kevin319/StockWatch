@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>My Stock</title>
     <link href="/static/styles.css" rel="stylesheet">
     <script>
@@ -123,6 +123,26 @@
                         <button class="seg-btn active" data-theme="dark" onclick="setTheme('dark')">深色</button>
                         <div class="seg-thumb"></div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-section-title">股票資訊顯示</div>
+            <div class="v2-card">
+                <div class="settings-row-simple">
+                    <span class="settings-row-label">價格走勢圖</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleChart" onchange="setShowChart(this.checked)">
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="settings-row-simple" style="border-top: 0.5px solid var(--hairline)">
+                    <span class="settings-row-label">AI 摘要</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleSummary" onchange="setShowSummary(this.checked)">
+                        <span class="toggle-track"></span>
+                    </label>
                 </div>
             </div>
         </div>

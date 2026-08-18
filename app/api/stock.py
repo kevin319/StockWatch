@@ -22,6 +22,9 @@ yahoo_cache = {}
 # sparkline 走勢快取（變動慢，快取較久）
 sparkline_cache = {}
 
+# 歷史走勢快取（含 OHLCV + MA + MDD）
+history_cache = {}
+
 # 基本面快取（變動更慢）
 fundamentals_cache = {}
 
@@ -290,6 +293,95 @@ async def get_sparkline(ticker: str, _: str = Depends(current_user_email)):
     except Exception as e:
         print(f"sparkline 取得失敗: {ticker} {e}")
         return {"ticker": ticker, "points": []}
+
+
+_RANGE_MAP = {
+    "24h": ("1d", "5m"),
+    "5d":  ("5d", "15m"),
+    "1m":  ("1mo", "1d"),
+    "3m":  ("3mo", "1d"),
+    "1y":  ("1y", "1d"),
+    "5y":  ("5y", "1wk"),
+    "max": ("max", "1mo"),
+}
+
+
+def _compute_history(ticker_yf: str, period: str, interval: str) -> dict:
+    """在 worker thread 執行：拉歷史 OHLCV、算 MA 和 max drawdown。"""
+    hist = yf.Ticker(ticker_yf).history(period=period, interval=interval)
+    if hist.empty:
+        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "mdd": None}
+
+    import math
+    hist = hist.dropna(subset=["Close"])
+    if hist.empty:
+        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "mdd": None}
+
+    dates = [d.strftime("%Y-%m-%d %H:%M") if interval in ("5m", "15m") else d.strftime("%Y-%m-%d")
+             for d in hist.index]
+    close = [round(float(c), 4) for c in hist["Close"]]
+    volume = [int(v) if not math.isnan(v) else 0 for v in hist["Volume"]]
+
+    ma20 = _ma_list(close, 20)
+    ma60 = _ma_list(close, 60)
+    ma120 = _ma_list(close, 120)
+
+    peak = 0.0
+    mdd = 0.0
+    for c in close:
+        if c > peak:
+            peak = c
+        if peak > 0:
+            dd = (c - peak) / peak
+            if dd < mdd:
+                mdd = dd
+    mdd = round(mdd * 100, 2)
+
+    hi = max(close)
+    lo = min(close)
+    avg = round(sum(close) / len(close), 4)
+
+    return {
+        "dates": dates, "close": close, "volume": volume,
+        "ma20": ma20, "ma60": ma60, "ma120": ma120,
+        "mdd": mdd, "high": hi, "low": lo, "avg": avg,
+    }
+
+
+def _ma_list(close: list, window: int) -> list:
+    n = len(close)
+    if n < window:
+        return [None] * n
+    result = [None] * (window - 1)
+    s = sum(close[:window])
+    result.append(round(s / window, 4))
+    for i in range(window, n):
+        s += close[i] - close[i - window]
+        result.append(round(s / window, 4))
+    return result
+
+
+@router.get("/history/{ticker}")
+async def get_history(ticker: str, range: str = "3m", _: str = Depends(current_user_email)):
+    """回傳歷史 OHLCV + MA20/60/120 + Max Drawdown，供前端畫走勢圖。快取 30 分鐘。"""
+    if range not in _RANGE_MAP:
+        range = "3m"
+    cache_key = f"{ticker}:{range}"
+    now = datetime.now()
+    if cache_key in history_cache:
+        ts, cached = history_cache[cache_key]
+        if now - ts < timedelta(minutes=30):
+            return cached
+    try:
+        period, interval = _RANGE_MAP[range]
+        data = await asyncio.to_thread(_compute_history, _yf_ticker(ticker), period, interval)
+        result = {"ticker": ticker, "range": range, **data}
+        if data["close"]:
+            history_cache[cache_key] = (now, result)
+        return result
+    except Exception as e:
+        print(f"history 取得失敗: {ticker} {e}")
+        return {"ticker": ticker, "range": range, "error": str(e)}
 
 
 @router.get("/fundamentals/{ticker}")
