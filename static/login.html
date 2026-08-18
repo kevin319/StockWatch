@@ -74,17 +74,23 @@
             .finally(() => { hideLoading(); });
         }
 
-        window.onload = function() {
-            google.accounts.id.initialize({
-                client_id: 'GOOGLE_CLIENT_ID_REMOVED',
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: true
-            });
-            google.accounts.id.renderButton(
-                document.getElementById('buttonDiv'),
-                { type: 'standard', theme: 'filled_black', size: 'large', width: 280, shape: 'pill' }
-            );
+        window.onload = async function() {
+            try {
+                const res = await fetch('/auth/client-id');
+                const data = await res.json();
+                google.accounts.id.initialize({
+                    client_id: data.client_id,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+                google.accounts.id.renderButton(
+                    document.getElementById('buttonDiv'),
+                    { type: 'standard', theme: 'filled_black', size: 'large', width: 280, shape: 'pill' }
+                );
+            } catch (e) {
+                showError('無法載入登入元件，請重新整理');
+            }
         };
     </script>
 </body>

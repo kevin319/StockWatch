@@ -27,6 +27,11 @@ def _create_access_token(email: str, name: str, picture: str) -> str:
     claims = {"sub": email, "name": name or "", "picture": picture or "", "exp": expire}
     return jwt.encode(claims, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
+@router.get("/auth/client-id")
+async def get_client_id():
+    """公開端點：回傳 Google OAuth Client ID 供前端初始化登入按鈕。"""
+    return {"client_id": settings.GOOGLE_CLIENT_ID}
+
 @router.get("/")
 async def read_root():
     return FileResponse("static/login.html")

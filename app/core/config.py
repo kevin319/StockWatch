@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
 
     # JWT 設定
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "your-secret-key")
+    JWT_SECRET: str = os.getenv("JWT_SECRET")
+    if not JWT_SECRET:
+        raise ValueError("JWT_SECRET 未在 .env 檔案中設定")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 

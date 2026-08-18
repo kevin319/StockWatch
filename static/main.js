@@ -457,20 +457,50 @@ async function loadFundamentals(ticker) {
     }
 }
 
-async function loadSummary(ticker) {
+async function loadSummary(ticker, refresh) {
     summaryData[ticker] = 'loading';
+    var _redraw = function() {
+        if (expandedTicker === ticker) {
+            var detail = document.querySelector('.stock-detail');
+            if (detail) { detail.innerHTML = detailHtml(ticker); scheduleChartRender(ticker); }
+            else renderStocks();
+        }
+    };
+    if (!refresh) _redraw();
     try {
-        const res = await authFetch('/ai-summary/' + ticker);
+        var url = '/ai-summary/' + ticker;
+        if (refresh) url += '?refresh=true';
+        const res = await authFetch(url);
         const data = await res.json();
+        if (data.cooldown) {
+            _showToast('摘要在一小時內已更新，暫時無法重新產生');
+            return;
+        }
         summaryData[ticker] = data.summary || '';
     } catch {
         summaryData[ticker] = '';
     }
-    if (expandedTicker === ticker) {
-        const detail = document.querySelector('.stock-detail');
-        if (detail) { detail.innerHTML = detailHtml(ticker); scheduleChartRender(ticker); }
-        else renderStocks();
-    }
+    _redraw();
+}
+
+function refreshSummary(ticker) {
+    var btn = document.querySelector('.summary-refresh-btn');
+    if (btn) btn.classList.add('spinning');
+    loadSummary(ticker, true).finally(function() {
+        var b = document.querySelector('.summary-refresh-btn');
+        if (b) b.classList.remove('spinning');
+    });
+}
+
+function _showToast(msg) {
+    var existing = document.querySelector('.sw-toast');
+    if (existing) existing.remove();
+    var el = document.createElement('div');
+    el.className = 'sw-toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function() { el.classList.add('show'); }, 10);
+    setTimeout(function() { el.classList.remove('show'); setTimeout(function() { el.remove(); }, 300); }, 2500);
 }
 
 // 展開面板 HTML：基本面 grid + 走勢圖（可關）+ AI 摘要（可關）
@@ -498,10 +528,12 @@ function fundamentalsHtml(ticker) {
         ['本益比', ratio(d.pe)],      ['股息', moneyNZ(d.dividend)],
         ['股價淨值比', ratio(d.pb)],  ['殖利率', pct(d.divYield)],
         ['股價營收比', ratio(d.ps)],  ['每股盈餘', money(d.eps)],
-    ];
-    return `<div class="detail-grid">${cells.map(([k, v]) =>
-        `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`
-        + week52RangeHtml(ticker, d);
+    ].filter(([, v]) => v !== '—');
+    var grid = cells.length
+        ? `<div class="detail-grid">${cells.map(([k, v]) =>
+            `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`
+        : '';
+    return grid + week52RangeHtml(ticker, d);
 }
 
 // 52 週區間位置條：現價在高低點之間的落點，一眼看出相對位置
@@ -541,10 +573,15 @@ function summaryHtml(ticker) {
             </button>`
         : '';
 
+    const refreshBtn = `<button class="summary-refresh-btn" aria-label="重新產生摘要"
+                onclick="event.stopPropagation(); refreshSummary('${ticker}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>`;
+
     return `<div class="summary-section">
         <div class="summary-head">
             <span class="summary-title">AI 摘要</span>
-            ${chatBtn}
+            <span class="summary-head-actions">${chatBtn}${refreshBtn}</span>
         </div>
         ${body}
         <div class="summary-disclaimer">AI 生成，僅供參考</div>
@@ -683,8 +720,43 @@ function loadChartIfNeeded(ticker) {
 }
 
 function switchChartRange(ticker, range) {
+    var prevRange = chartRange[ticker] || '3m';
     chartRange[ticker] = range;
-    loadChartIfNeeded(ticker);
+    var key = ticker + ':' + range;
+
+    // 立刻更新按鈕 active 狀態（不重建整個 panel）
+    document.querySelectorAll('.chart-range-btn').forEach(function(btn, i) {
+        btn.classList.toggle('active', CHART_RANGE_KEYS[i] === range);
+    });
+
+    if (key in chartCache && chartCache[key] !== 'loading') {
+        // 已有快取，直接重繪圖表區
+        _replaceChartBody(ticker);
+        scheduleChartRender(ticker);
+    } else {
+        // 無快取：保留舊圖表，fetch 完成後再替換
+        chartCache[key] = 'loading';
+        authFetch('/history/' + ticker + '?range=' + range)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                chartCache[key] = data;
+                if (expandedTicker === ticker && chartRange[ticker] === range) {
+                    _replaceChartBody(ticker);
+                    scheduleChartRender(ticker);
+                }
+            })
+            .catch(function() {
+                chartCache[key] = { error: true };
+                if (expandedTicker === ticker && chartRange[ticker] === range) {
+                    _replaceChartBody(ticker);
+                }
+            });
+    }
+}
+
+function _replaceChartBody(ticker) {
+    var section = document.querySelector('.chart-section');
+    if (!section) return;
     var detail = document.querySelector('.stock-detail');
     if (detail) { detail.innerHTML = detailHtml(ticker); scheduleChartRender(ticker); }
 }
@@ -719,10 +791,10 @@ function renderChart(ticker) {
     var ma120 = d.ma120 || [];
     var n = close.length;
 
-    // 價格區域佔上方 78%，成交量佔下方 22%
-    var priceH = H * 0.78;
-    var volH = H * 0.18;
-    var volTop = H * 0.82;
+    var hasVol = vol.some(function(v) { return v > 0; });
+    var priceH = hasVol ? H * 0.78 : H;
+    var volH = hasVol ? H * 0.18 : 0;
+    var volTop = hasVol ? H * 0.82 : H;
     var padTop = 4;
 
     // 價格範圍
@@ -742,16 +814,18 @@ function renderChart(ticker) {
     var vMax = vol.length ? Math.max.apply(null, vol) : 1;
     if (vMax === 0) vMax = 1;
 
-    // 先畫成交量柱狀圖
+    // 先畫成交量柱狀圖（volume 全為 0 時跳過，如外匯）
     var barW = Math.max(1, W / n - 0.5);
-    for (var i = 0; i < vol.length; i++) {
-        var barH = (vol[i] / vMax) * volH;
-        if (barH < 1) barH = 1;
-        var isUp = i === 0 || close[i] >= close[i - 1];
-        ctx.fillStyle = isUp
-            ? (isDark ? 'rgba(255,59,48,0.35)' : 'rgba(255,59,48,0.25)')
-            : (isDark ? 'rgba(52,199,89,0.35)' : 'rgba(52,199,89,0.25)');
-        ctx.fillRect(xOf(i) - barW / 2, volTop + volH - barH, barW, barH);
+    if (hasVol) {
+        for (var i = 0; i < vol.length; i++) {
+            var barH = (vol[i] / vMax) * volH;
+            if (barH < 1) barH = 1;
+            var isUp = i === 0 || close[i] >= close[i - 1];
+            ctx.fillStyle = isUp
+                ? (isDark ? 'rgba(255,59,48,0.35)' : 'rgba(255,59,48,0.25)')
+                : (isDark ? 'rgba(52,199,89,0.35)' : 'rgba(52,199,89,0.25)');
+            ctx.fillRect(xOf(i) - barW / 2, volTop + volH - barH, barW, barH);
+        }
     }
 
     // 面積圖：收盤價走勢
@@ -1264,7 +1338,7 @@ let pollTimer = null;
 function getPollingInterval() {
     if (!stocks || !stocks.length) return 10000;
     const states = stocks.map(s => s.market_state || '');
-    if (states.some(s => s === 'REGULAR')) return 10000;
+    if (states.some(s => s === 'REGULAR')) return 5000;
     if (states.some(s => s === 'PRE' || s === 'POST')) return 15000;
     return 300000;
 }

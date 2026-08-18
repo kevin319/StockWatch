@@ -127,7 +127,7 @@ async def get_stock_price(ticker: str, _: str = Depends(current_user_email)):
             time_diff = current_time - cache_data['timestamp']
             last_state = cache_data['data'].get('market_state', '')
             if last_state == 'REGULAR':
-                cache_ttl = timedelta(seconds=8)  # <10s，讓前端 10 秒輪詢每次都拿到新價
+                cache_ttl = timedelta(seconds=4)  # <5s，配合前端 5 秒輪詢
             elif last_state in ('PRE', 'POST'):
                 cache_ttl = timedelta(seconds=12)  # <15s，配合前端盤前/盤後 15 秒輪詢
             else:
@@ -475,6 +475,30 @@ async def get_stock(ticker: str, _: str = Depends(current_user_email)):
             'ticker': ticker
         }
 
+# 主要外匯貨幣對（靜態清單，搜尋時優先比對）
+_FOREX_PAIRS = [
+    ("USDTWD=X", "USD/TWD", "美元/新台幣"),
+    ("USDJPY=X", "USD/JPY", "美元/日圓"),
+    ("EURUSD=X", "EUR/USD", "歐元/美元"),
+    ("GBPUSD=X", "GBP/USD", "英鎊/美元"),
+    ("USDCNY=X", "USD/CNY", "美元/人民幣"),
+    ("USDHKD=X", "USD/HKD", "美元/港幣"),
+    ("AUDUSD=X", "AUD/USD", "澳幣/美元"),
+    ("NZDUSD=X", "NZD/USD", "紐幣/美元"),
+    ("USDCAD=X", "USD/CAD", "美元/加幣"),
+    ("USDCHF=X", "USD/CHF", "美元/瑞郎"),
+    ("EURGBP=X", "EUR/GBP", "歐元/英鎊"),
+    ("EURJPY=X", "EUR/JPY", "歐元/日圓"),
+    ("GBPJPY=X", "GBP/JPY", "英鎊/日圓"),
+    ("USDSGD=X", "USD/SGD", "美元/新加坡幣"),
+    ("USDKRW=X", "USD/KRW", "美元/韓元"),
+    ("USDINR=X", "USD/INR", "美元/印度盧比"),
+    ("USDTHB=X", "USD/THB", "美元/泰銖"),
+    ("USDMXN=X", "USD/MXN", "美元/墨西哥披索"),
+    ("EURCHF=X", "EUR/CHF", "歐元/瑞郎"),
+    ("EURCNY=X", "EUR/CNY", "歐元/人民幣"),
+]
+
 # Yahoo 內部交易所代碼 → 使用者看得懂的名稱（查無對應時顯示原代碼）
 _EXCHANGE_NAMES = {
     "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ", "NYQ": "NYSE",
@@ -485,45 +509,56 @@ _EXCHANGE_NAMES = {
 }
 
 
+def _search_forex(query: str) -> list[dict]:
+    """比對靜態外匯清單，回傳符合的結果。"""
+    q = query.upper().replace("/", "").replace("=X", "")
+    matches = []
+    for symbol, pair_name, cn_name in _FOREX_PAIRS:
+        key = symbol.replace("=X", "")
+        if q in key or q in pair_name.upper().replace("/", "") or q in cn_name:
+            matches.append({
+                'symbol': symbol,
+                'name': f"{pair_name} {cn_name}",
+                'exchange': 'FX',
+                'display': f"{symbol} - {pair_name} {cn_name} (外匯)"
+            })
+    return matches
+
+
 @router.get("/autocomplete/{query}")
 async def autocomplete(query: str, _: str = Depends(current_user_email)):
     try:
+        # 先比對靜態外匯清單
+        forex_hits = _search_forex(query)
+
         # 使用 yahooquery 搜尋股票
         search = await asyncio.to_thread(yq.search, query)
-        
-        # 檢查是否有搜尋結果
-        if not search or 'quotes' not in search:
-            return []
-        
+
         # 過濾並格式化結果
-        results = []
-        for quote in search['quotes']:
-            # 只包含股票和 ETF
-            if quote.get('quoteType') in ['EQUITY', 'ETF']:
-                # 構建顯示名稱
-                symbol = quote.get('symbol', '')
-                short_name = quote.get('shortname', '') or quote.get('longname', '')
-                exchange = quote.get('exchange', '')
-                
-                # 如果沒有足夠信息則跳過
-                if not (symbol and short_name):
-                    continue
-                
-                # 格式化顯示名稱（交易所代碼翻成可讀名稱）
-                display = f"{symbol} - {short_name}"
-                if exchange:
-                    display += f" ({_EXCHANGE_NAMES.get(exchange, exchange)})"
-                
-                results.append({
-                    'symbol': symbol,
-                    'name': short_name,
-                    'exchange': exchange,
-                    'display': display
-                })
-        
-        # 限制返回結果數量
-        return results[:10]
-    
+        stock_results = []
+        if search and 'quotes' in search:
+            for quote in search['quotes']:
+                if quote.get('quoteType') in ['EQUITY', 'ETF']:
+                    symbol = quote.get('symbol', '')
+                    short_name = quote.get('shortname', '') or quote.get('longname', '')
+                    exchange = quote.get('exchange', '')
+                    if not (symbol and short_name):
+                        continue
+                    display = f"{symbol} - {short_name}"
+                    if exchange:
+                        display += f" ({_EXCHANGE_NAMES.get(exchange, exchange)})"
+                    stock_results.append({
+                        'symbol': symbol,
+                        'name': short_name,
+                        'exchange': exchange,
+                        'display': display
+                    })
+
+        # 外匯優先，合併後限制數量
+        seen = {r['symbol'] for r in forex_hits}
+        combined = forex_hits + [r for r in stock_results if r['symbol'] not in seen]
+        return combined[:10]
+
     except Exception as e:
         print(f"搜尋時發生錯誤: {str(e)}")
         return []
@@ -630,6 +665,38 @@ async def _collect_us_context(ticker: str) -> str:
     return "\n\n".join(parts)
 
 
+def _collect_fx_context_sync(ticker: str) -> str:
+    """外匯：嘗試直接取新聞，取不到時用 quote 貨幣（如 TWD=X）撈。"""
+    titles = []
+
+    def _extract_titles(news_list):
+        out = []
+        for n in (news_list or [])[:10]:
+            t = n.get("title") or (n.get("content") or {}).get("title")
+            if t:
+                out.append(t)
+        return out
+
+    try:
+        titles = _extract_titles(yf.Ticker(ticker).news)
+    except Exception:
+        pass
+
+    if not titles:
+        # fallback: 用 quote 貨幣取新聞（USDTWD=X → TWD=X）
+        raw = ticker.upper().replace("=X", "")
+        if len(raw) == 6:
+            quote_sym = raw[3:] + "=X"
+            try:
+                titles = _extract_titles(yf.Ticker(quote_sym).news)
+            except Exception:
+                pass
+
+    if titles:
+        return "近期新聞標題：\n" + "\n".join(f"- {x}" for x in titles)
+    return ""
+
+
 def _collect_non_us_context_sync(ticker: str) -> str:
     """非美股：yfinance 新聞 title + 最新季度財務。於 to_thread 內執行（阻塞）。"""
     parts = []
@@ -677,17 +744,25 @@ def _collect_non_us_context_sync(ticker: str) -> str:
     return "\n\n".join(parts)
 
 
-async def _call_deepseek_summary(ticker: str, context_text: str) -> str:
+async def _call_deepseek_summary(ticker: str, context_text: str, *, is_fx: bool = False) -> str:
     """呼叫 DeepSeek 產生 200 字以內繁中摘要。沿用 chat.py 的呼叫方式。"""
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
     }
-    system_prompt = (
-        "你是專業的證券分析師。請根據提供的財報與新聞資料，為這支股票產生一段繁體中文摘要，"
-        "聚焦於：財報表現、近期新聞題材、對股價的潛在影響。語氣客觀中立，不做投資建議。"
-        "嚴格限制在 200 字以內，且務必是完整的句子、不可在句子中途結束。"
-    )
+    if is_fx:
+        system_prompt = (
+            "你是專業的外匯分析師。請根據提供的新聞資料，為這個貨幣對產生一段繁體中文摘要，"
+            "聚焦於：近期匯率走勢、影響匯率的經濟事件與央行政策、短期展望。"
+            "語氣客觀中立，不做投資建議。"
+            "嚴格限制在 200 字以內，且務必是完整的句子、不可在句子中途結束。"
+        )
+    else:
+        system_prompt = (
+            "你是專業的證券分析師。請根據提供的財報與新聞資料，為這支股票產生一段繁體中文摘要，"
+            "聚焦於：財報表現、近期新聞題材、對股價的潛在影響。語氣客觀中立，不做投資建議。"
+            "嚴格限制在 200 字以內，且務必是完整的句子、不可在句子中途結束。"
+        )
     user_content = f"股票代號：{ticker}\n\n資料：\n{context_text}"
     data = {
         "model": settings.DEEPSEEK_MODEL,
@@ -717,7 +792,10 @@ async def generate_stock_summary(ticker: str) -> str:
     """產生單支股票摘要（不含快取判斷）：蒐集資料→呼叫 DeepSeek→upsert。
     供端點與排程共用。回傳摘要字串；任何階段失敗時回空字串並印 log。"""
     try:
-        if '.' not in ticker and settings.FINNHUB_API_KEY:
+        is_fx = ticker.upper().endswith("=X")
+        if is_fx:
+            context_text = await asyncio.to_thread(_collect_fx_context_sync, ticker)
+        elif '.' not in ticker and settings.FINNHUB_API_KEY:
             context_text = await _collect_us_context(ticker)
         else:
             context_text = await asyncio.to_thread(_collect_non_us_context_sync, ticker)
@@ -725,7 +803,7 @@ async def generate_stock_summary(ticker: str) -> str:
         if not context_text:
             context_text = "（無可用的新聞與財報資料）"
 
-        summary = await _call_deepseek_summary(ticker, context_text)
+        summary = await _call_deepseek_summary(ticker, context_text, is_fx=is_fx)
         if summary:
             try:
                 await asyncio.to_thread(_db_upsert_summary, ticker, summary)
@@ -738,8 +816,8 @@ async def generate_stock_summary(ticker: str) -> str:
 
 
 @router.get("/ai-summary/{ticker}")
-async def get_ai_summary(ticker: str, _: str = Depends(current_user_email)):
-    """回傳 AI 股票摘要。25 小時內有快取則直接回，否則即時產生。絕不丟 500。"""
+async def get_ai_summary(ticker: str, refresh: bool = False, _: str = Depends(current_user_email)):
+    """回傳 AI 股票摘要。25 小時內有快取則直接回，否則即時產生。refresh=true 強制重新產生。"""
     try:
         # 先看快取
         try:
@@ -751,7 +829,17 @@ async def get_ai_summary(ticker: str, _: str = Depends(current_user_email)):
         if cached and cached.get("summary") and cached.get("generated_at"):
             gen = cached["generated_at"]
             now = datetime.now(gen.tzinfo) if gen.tzinfo else datetime.now()
-            if now - gen < timedelta(hours=25):
+            age = now - gen
+
+            if refresh and age < timedelta(hours=1):
+                return {
+                    "ticker": ticker,
+                    "summary": cached["summary"],
+                    "generated_at": gen.isoformat(),
+                    "cooldown": True,
+                }
+
+            if not refresh and age < timedelta(hours=25):
                 return {
                     "ticker": ticker,
                     "summary": cached["summary"],
