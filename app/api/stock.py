@@ -310,12 +310,12 @@ def _compute_history(ticker_yf: str, period: str, interval: str) -> dict:
     """在 worker thread 執行：拉歷史 OHLCV、算 MA 和 max drawdown。"""
     hist = yf.Ticker(ticker_yf).history(period=period, interval=interval)
     if hist.empty:
-        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "mdd": None}
+        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "bb_upper": [], "bb_lower": [], "mdd": None}
 
     import math
     hist = hist.dropna(subset=["Close"])
     if hist.empty:
-        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "mdd": None}
+        return {"dates": [], "close": [], "volume": [], "ma20": [], "ma60": [], "ma120": [], "bb_upper": [], "bb_lower": [], "mdd": None}
 
     dates = [d.strftime("%Y-%m-%d %H:%M") if interval in ("5m", "15m") else d.strftime("%Y-%m-%d")
              for d in hist.index]
@@ -325,6 +325,7 @@ def _compute_history(ticker_yf: str, period: str, interval: str) -> dict:
     ma20 = _ma_list(close, 20)
     ma60 = _ma_list(close, 60)
     ma120 = _ma_list(close, 120)
+    bb_upper, bb_lower = _bollinger_bands(close, 20, 2)
 
     peak = 0.0
     mdd = 0.0
@@ -344,6 +345,7 @@ def _compute_history(ticker_yf: str, period: str, interval: str) -> dict:
     return {
         "dates": dates, "close": close, "volume": volume,
         "ma20": ma20, "ma60": ma60, "ma120": ma120,
+        "bb_upper": bb_upper, "bb_lower": bb_lower,
         "mdd": mdd, "high": hi, "low": lo, "avg": avg,
     }
 
@@ -359,6 +361,24 @@ def _ma_list(close: list, window: int) -> list:
         s += close[i] - close[i - window]
         result.append(round(s / window, 4))
     return result
+
+
+def _bollinger_bands(close: list, window: int = 20, num_std: int = 2) -> tuple[list, list]:
+    """純 Python 計算布林通道上下軌。"""
+    import math
+    n = len(close)
+    upper = [None] * n
+    lower = [None] * n
+    if n < window:
+        return upper, lower
+    for i in range(window - 1, n):
+        seg = close[i - window + 1: i + 1]
+        mean = sum(seg) / window
+        variance = sum((x - mean) ** 2 for x in seg) / window
+        std = math.sqrt(variance)
+        upper[i] = round(mean + num_std * std, 4)
+        lower[i] = round(mean - num_std * std, 4)
+    return upper, lower
 
 
 @router.get("/history/{ticker}")

@@ -338,10 +338,12 @@ img { display: block; max-width: 100%; }
 .chart-ma-dot-20  { background: #0071e3; }
 .chart-ma-dot-60  { background: #e68600; }
 .chart-ma-dot-120 { background: #9b38d9; }
+.chart-ma-dot-bb  { background: rgba(0,113,227,0.25); border: 1px solid #0071e3; width: 4px; height: 4px; }
 
 [data-theme="dark"] .chart-ma-dot-20  { background: #5aa9ff; }
 [data-theme="dark"] .chart-ma-dot-60  { background: #ff9f0a; }
 [data-theme="dark"] .chart-ma-dot-120 { background: #bf5af2; }
+[data-theme="dark"] .chart-ma-dot-bb  { background: rgba(90,169,255,0.25); border-color: #5aa9ff; }
 
 /* 圖表畫布 + 四角覆蓋標注 */
 .chart-canvas-wrap {

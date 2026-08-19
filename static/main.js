@@ -615,10 +615,11 @@ function _fmtPrice(v) {
     return v >= 1000 ? v.toFixed(0) : v.toFixed(2);
 }
 
-function _maLegendHtml(ma20v, ma60v, ma120v) {
+function _maLegendHtml(ma20v, ma60v, ma120v, bbU, bbL) {
     return '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-20"></span>MA20:<b>' + _fmtPrice(ma20v) + '</b></span>'
         + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-60"></span>MA60:<b>' + _fmtPrice(ma60v) + '</b></span>'
-        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-120"></span>MA120:<b>' + _fmtPrice(ma120v) + '</b></span>';
+        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-120"></span>MA120:<b>' + _fmtPrice(ma120v) + '</b></span>'
+        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-bb"></span>BB:<b>' + _fmtPrice(bbU) + '/' + _fmtPrice(bbL) + '</b></span>';
 }
 
 function _pctVsAvg(v, avg) {
@@ -641,7 +642,7 @@ function chartSectionHtml(ticker) {
     // MA 圖例列（永遠顯示三項，避免 hover 時高度跳動）
     var maHtml = '';
     if (hasData) {
-        maHtml = '<div class="chart-ma-legend">' + _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120)) + '</div>';
+        maHtml = '<div class="chart-ma-legend">' + _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120), _lastNonNull(d.bb_upper), _lastNonNull(d.bb_lower)) + '</div>';
     }
 
     var safeId = ticker.replace(/\./g, '_');
@@ -789,6 +790,8 @@ function renderChart(ticker) {
     var ma20 = d.ma20 || [];
     var ma60 = d.ma60 || [];
     var ma120 = d.ma120 || [];
+    var bbUpper = d.bb_upper || [];
+    var bbLower = d.bb_lower || [];
     var n = close.length;
 
     var hasVol = vol.some(function(v) { return v > 0; });
@@ -799,7 +802,7 @@ function renderChart(ticker) {
 
     // 價格範圍
     var allPrices = close.slice();
-    [ma20, ma60, ma120].forEach(function(ma) {
+    [ma20, ma60, ma120, bbUpper, bbLower].forEach(function(ma) {
         ma.forEach(function(v) { if (v != null) allPrices.push(v); });
     });
     var pMin = Math.min.apply(null, allPrices);
@@ -838,6 +841,23 @@ function renderChart(ticker) {
         grad.addColorStop(1, isDark ? 'rgba(52,199,89,0.02)' : 'rgba(52,199,89,0.02)');
     }
 
+    // 布林通道帶狀填充（畫在最底層）
+    var bbStart = -1;
+    for (var i = 0; i < n; i++) { if (bbUpper[i] != null && bbLower[i] != null) { bbStart = i; break; } }
+    if (bbStart >= 0) {
+        ctx.beginPath();
+        ctx.moveTo(xOf(bbStart), yOf(bbUpper[bbStart]));
+        for (var i = bbStart + 1; i < n; i++) {
+            if (bbUpper[i] != null) ctx.lineTo(xOf(i), yOf(bbUpper[i]));
+        }
+        for (var i = n - 1; i >= bbStart; i--) {
+            if (bbLower[i] != null) ctx.lineTo(xOf(i), yOf(bbLower[i]));
+        }
+        ctx.closePath();
+        ctx.fillStyle = isDark ? 'rgba(90,169,255,0.08)' : 'rgba(0,113,227,0.06)';
+        ctx.fill();
+    }
+
     ctx.beginPath();
     ctx.moveTo(xOf(0), yOf(close[0]));
     for (var i = 1; i < n; i++) ctx.lineTo(xOf(i), yOf(close[i]));
@@ -874,6 +894,13 @@ function renderChart(ticker) {
     drawMA(ma20, isDark ? '#5aa9ff' : '#0071e3');
     drawMA(ma60, isDark ? '#ff9f0a' : '#e68600');
     drawMA(ma120, isDark ? '#bf5af2' : '#9b38d9');
+
+    // 布林通道上下軌（虛線）
+    var bbColor = isDark ? 'rgba(90,169,255,0.35)' : 'rgba(0,113,227,0.25)';
+    ctx.setLineDash([3, 3]);
+    drawMA(bbUpper, bbColor);
+    drawMA(bbLower, bbColor);
+    ctx.setLineDash([]);
 
     // 均價虛線
     if (d.avg) {
@@ -1004,6 +1031,8 @@ function _updateHoverInfo(safeId, idx) {
     var ma20v = (d.ma20 && d.ma20[idx] != null) ? d.ma20[idx] : null;
     var ma60v = (d.ma60 && d.ma60[idx] != null) ? d.ma60[idx] : null;
     var ma120v = (d.ma120 && d.ma120[idx] != null) ? d.ma120[idx] : null;
+    var bbUv = (d.bb_upper && d.bb_upper[idx] != null) ? d.bb_upper[idx] : null;
+    var bbLv = (d.bb_lower && d.bb_lower[idx] != null) ? d.bb_lower[idx] : null;
 
     var html = '<span class="hover-date">' + date + '</span> '
         + '<span class="' + chgClass + '">' + _fmtPrice(price) + '</span> '
@@ -1016,7 +1045,7 @@ function _updateHoverInfo(safeId, idx) {
     el.classList.remove('hover-idle');
 
     var maEl = el.parentElement.querySelector('.chart-ma-legend');
-    if (maEl) maEl.innerHTML = _maLegendHtml(ma20v, ma60v, ma120v);
+    if (maEl) maEl.innerHTML = _maLegendHtml(ma20v, ma60v, ma120v, bbUv, bbLv);
 }
 
 function _hideHoverInfo(safeId) {
@@ -1030,7 +1059,7 @@ function _hideHoverInfo(safeId) {
     var d = chartCache[geo.ticker + ':' + range];
     if (!d) return;
     var maEl = el.parentElement.querySelector('.chart-ma-legend');
-    if (maEl) maEl.innerHTML = _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120));
+    if (maEl) maEl.innerHTML = _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120), _lastNonNull(d.bb_upper), _lastNonNull(d.bb_lower));
 }
 
 function updateHeroCaption() {
