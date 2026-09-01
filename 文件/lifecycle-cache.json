@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "StockWatch 報價查詢生命週期",
+    "output": "文件/lifecycle-cache.html",
+    "quality_profile": "showcase",
+    "viewBox": [960, 566],
+    "views": [
+      { "id": "cache-hit", "label": "快取命中路徑", "focus": ["request", "check", "respond"], "note": "快取命中時走上方捷徑直接回傳。" },
+      { "id": "fetch-path", "label": "取得報價路徑", "focus": ["check", "fetch", "write-cache", "respond"], "note": "未命中時經 Provider 取得報價後寫入快取。" },
+      { "id": "fallback-path", "label": "Fallback 備源", "focus": ["fetch", "failed", "write-cache"], "note": "Provider 失敗走 yfinance 備源，成功後寫入快取。" }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "查詢生命週期" },
+    { "id": "fallback", "label": "Fallback 路徑" }
+  ],
+  "states": [
+    { "id": "request", "type": "start", "label": "收到請求", "sublabel": "GET /stockprice/{ticker}", "lane": "main", "col": 0, "tag": "entry" },
+    { "id": "check", "type": "decision", "label": "檢查快取", "sublabel": "TTL 判斷", "lane": "main", "col": 1, "tag": "4s~5min" },
+    { "id": "fetch", "type": "active", "label": "Provider 取得", "sublabel": "Finnhub/TWSE/新浪", "lane": "main", "col": 2, "tag": "HTTP" },
+    { "id": "write-cache", "type": "active", "label": "更新快取", "sublabel": "記憶體 + DB", "lane": "main", "col": 3 },
+    { "id": "respond", "type": "success", "label": "回傳 JSON", "sublabel": "200 OK", "lane": "main", "col": 4, "tag": "done" },
+    { "id": "failed", "type": "failure", "label": "yfinance 備源", "sublabel": "Fallback 取得", "lane": "fallback", "col": 0, "tag": "retry" }
+  ],
+  "transitions": [
+    { "from": "request", "to": "check", "variant": "emphasis" },
+    { "from": "check", "to": "respond", "label": "快取命中", "variant": "emphasis", "fromSide": "top", "toSide": "top", "via": [[248, 60], [710, 60]] },
+    { "from": "check", "to": "fetch", "label": "未命中", "labelDy": -25, "labelDx": 30 },
+    { "from": "fetch", "to": "failed", "label": "失敗", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "straight", "labelDy": 24 },
+    { "from": "failed", "to": "write-cache", "label": "備源成功", "variant": "emphasis", "fromSide": "right", "toSide": "bottom" },
+    { "from": "fetch", "to": "write-cache", "label": "成功" },
+    { "from": "write-cache", "to": "respond", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "快取優先", "items": ["快取命中時直接回傳，延遲最低", "TTL 動態調整：盤中 4s、盤前盤後 12s、休市 5min"] },
+    { "dot": "amber", "title": "多層 Fallback", "items": ["先走專屬 Provider（Finnhub/TWSE/新浪）", "失敗時 fallback 到 yfinance", "取得報價後寫入快取與資料庫"] }
+  ]
+}

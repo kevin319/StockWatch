@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "StockWatch 排程任務",
+    "output": "文件/workflow-scheduler.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "backup", "label": "每日備份 (03:00)" },
+    { "id": "summary", "label": "AI 摘要更新 (07:00)" }
+  ],
+  "mainPath": ["trigger-backup", "pg-dump", "validate-dump", "compress", "prune"],
+  "nodes": [
+    { "id": "trigger-backup", "lane": "backup", "col": 0, "type": "backend", "label": "排程觸發", "sublabel": "03:00 TST" },
+    { "id": "pg-dump", "lane": "backup", "col": 1, "type": "database", "label": "pg_dump", "sublabel": "邏輯備份" },
+    { "id": "validate-dump", "lane": "backup", "col": 2, "type": "backend", "label": "驗證完整性", "sublabel": "尾行檢查" },
+    { "id": "compress", "lane": "backup", "col": 3, "type": "cloud", "label": "gzip 壓縮", "sublabel": ".sql.gz" },
+    { "id": "prune", "lane": "backup", "col": 4, "type": "backend", "label": "輪替清理", "sublabel": "保留 30 份" },
+    { "id": "trigger-summary", "lane": "summary", "col": 0, "type": "backend", "label": "排程觸發", "sublabel": "07:00 TST" },
+    { "id": "collect-tickers", "lane": "summary", "col": 1, "type": "database", "label": "取得自選股", "sublabel": "DISTINCT ticker" },
+    { "id": "fetch-news", "lane": "summary", "col": 2, "type": "external", "label": "蒐集新聞財報", "sublabel": "Finnhub / yfinance" },
+    { "id": "call-llm", "lane": "summary", "col": 3, "type": "external", "label": "DeepSeek 摘要", "sublabel": "200 字繁中" },
+    { "id": "upsert-summary", "lane": "summary", "col": 4, "type": "database", "label": "寫入快取", "sublabel": "stock_summaries" }
+  ],
+  "edges": [
+    { "from": "trigger-backup", "to": "pg-dump", "variant": "emphasis" },
+    { "from": "pg-dump", "to": "validate-dump" },
+    { "from": "validate-dump", "to": "compress" },
+    { "from": "compress", "to": "prune" },
+    { "from": "trigger-summary", "to": "collect-tickers", "variant": "emphasis" },
+    { "from": "collect-tickers", "to": "fetch-news" },
+    { "from": "fetch-news", "to": "call-llm" },
+    { "from": "call-llm", "to": "upsert-summary" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "每日備份", "items": ["03:00 執行 pg_dump 邏輯備份", "驗證 dump 完整性後 gzip 壓縮", "自動輪替保留最近 30 份"] },
+    { "dot": "violet", "title": "AI 摘要更新", "items": ["07:00 對所有自選股逐支更新", "依市場選擇 Finnhub 或 yfinance 蒐集資料", "DeepSeek LLM 產生 200 字摘要"] }
+  ]
+}

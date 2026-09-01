@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "StockWatch 系統架構",
+    "output": "文件/architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "request-path", "label": "使用者請求路徑", "focus": ["browser", "fastapi", "postgres"], "note": "使用者從瀏覽器經 FastAPI 到 PostgreSQL 的主要請求路徑。" },
+      { "id": "auth-flow", "label": "認證流程", "focus": ["browser", "google-oauth", "fastapi"], "note": "Google OAuth 登入後簽發 JWT 的認證路徑。" },
+      { "id": "market-data", "label": "行情資料來源", "focus": ["finnhub", "twse", "sina", "yfinance", "fastapi"], "note": "多市場報價的取得策略與 fallback 路徑。" },
+      { "id": "ai-summary", "label": "AI 摘要", "focus": ["fastapi", "finnhub", "yfinance", "deepseek"], "note": "蒐集新聞與財報資料後呼叫 DeepSeek 產生摘要。" }
+    ]
+  },
+  "components": [
+    { "id": "browser", "type": "frontend", "label": "瀏覽器", "sublabel": "HTML / JS", "pos": [40, 280], "size": [120, 60] },
+    { "id": "google-oauth", "type": "security", "label": "Google OAuth", "sublabel": "身分驗證", "pos": [40, 100], "size": [120, 64], "tag": "OAuth 2.0" },
+    { "id": "fastapi", "type": "backend", "label": "FastAPI", "sublabel": "uvicorn :8000", "pos": [300, 280], "size": [140, 60], "tag": "Python" },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "持久化 :5432", "pos": [560, 280], "size": [130, 60], "tag": "v15" },
+    { "id": "finnhub", "type": "external", "label": "Finnhub", "sublabel": "美股報價", "pos": [560, 100], "size": [120, 56] },
+    { "id": "twse", "type": "external", "label": "TWSE", "sublabel": "台股報價", "pos": [740, 100], "size": [120, 56] },
+    { "id": "sina", "type": "external", "label": "新浪財經", "sublabel": "港股/A股", "pos": [920, 100], "size": [120, 56] },
+    { "id": "yfinance", "type": "external", "label": "yfinance", "sublabel": "通用 Fallback", "pos": [740, 210], "size": [120, 56] },
+    { "id": "deepseek", "type": "external", "label": "DeepSeek", "sublabel": "AI 摘要", "pos": [560, 440], "size": [120, 56], "tag": "LLM" },
+    { "id": "scheduler", "type": "backend", "label": "APScheduler", "sublabel": "排程任務", "pos": [300, 440], "size": [130, 56], "tag": "Cron" },
+    { "id": "backup", "type": "cloud", "label": "備份檔案", "sublabel": "pg_dump .sql.gz", "pos": [40, 440], "size": [130, 56], "tag": "30 份輪替" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Docker Compose", "wraps": ["fastapi", "postgres", "scheduler"] },
+    { "kind": "region", "label": "外部行情 API", "wraps": ["finnhub", "twse", "sina", "yfinance"] }
+  ],
+  "connections": [
+    { "id": "browser-to-api", "from": "browser", "to": "fastapi", "label": "REST API", "variant": "emphasis" },
+    { "id": "google-login", "from": "browser", "to": "google-oauth", "label": "Google 登入", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "verify-token", "from": "google-oauth", "to": "fastapi", "label": "驗證 id_token", "variant": "security", "fromSide": "right", "toSide": "top", "labelDx": -60 },
+    { "id": "api-to-db", "from": "fastapi", "to": "postgres", "label": "psycopg2", "labelDy": -20 },
+    { "id": "api-to-finnhub", "from": "fastapi", "to": "finnhub", "label": "美股優先", "fromSide": "top", "toSide": "bottom" },
+    { "id": "api-to-twse", "from": "fastapi", "to": "twse", "label": "台股", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "id": "api-to-sina", "from": "fastapi", "to": "sina", "label": "港股/A股", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "id": "api-to-yfinance", "from": "fastapi", "to": "yfinance", "label": "Fallback", "fromSide": "top", "toSide": "left" },
+    { "id": "api-to-deepseek", "from": "fastapi", "to": "deepseek", "label": "產生摘要", "variant": "dashed", "fromSide": "bottom", "toSide": "top" },
+    { "id": "scheduler-backup", "from": "scheduler", "to": "backup", "label": "每日 03:00", "variant": "dashed" },
+    { "id": "scheduler-summary", "from": "scheduler", "to": "fastapi", "label": "每日 07:00 摘要", "variant": "dashed", "fromSide": "top", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "前端", "items": ["靜態 HTML/JS，無框架", "Google OAuth 登入 + JWT 長效 session", "5 秒輪詢即時報價"] },
+    { "dot": "emerald", "title": "後端服務", "items": ["FastAPI + uvicorn 非同步", "多層快取（記憶體 4s~6hr）", "APScheduler 排程備份與摘要"] },
+    { "dot": "violet", "title": "資料來源", "items": ["美股 Finnhub → yfinance fallback", "台股 TWSE、港股/A股新浪財經", "DeepSeek LLM 產生 AI 摘要"] }
+  ]
+}

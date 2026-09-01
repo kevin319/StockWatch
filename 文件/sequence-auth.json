@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "StockWatch 認證流程",
+    "output": "文件/sequence-auth.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [820, 480]
+  },
+  "participants": [
+    { "id": "browser", "type": "frontend", "label": "瀏覽器", "sublabel": "HTML / JS" },
+    { "id": "google", "type": "security", "label": "Google OAuth", "sublabel": "身分驗證" },
+    { "id": "api", "type": "backend", "label": "FastAPI", "sublabel": "uvicorn :8000" },
+    { "id": "db", "type": "database", "label": "PostgreSQL", "sublabel": "使用者資料" }
+  ],
+  "segments": [
+    { "from": 160, "to": 340, "label": "登入" },
+    { "from": 350, "to": 400, "label": "Session" }
+  ],
+  "messages": [
+    { "id": "google-login", "from": "browser", "to": "google", "y": 180, "label": "Google 登入", "variant": "security" },
+    { "id": "id-token-return", "from": "google", "to": "browser", "y": 210, "label": "id_token", "variant": "return" },
+    { "id": "verify-token", "from": "browser", "to": "api", "y": 240, "label": "POST /verify_token", "variant": "emphasis" },
+    { "id": "verify-google", "from": "api", "to": "google", "y": 270, "label": "驗證 id_token", "variant": "security" },
+    { "id": "upsert-user", "from": "api", "to": "db", "y": 300, "label": "upsert 使用者", "variant": "default" },
+    { "id": "jwt-return", "from": "api", "to": "browser", "y": 330, "label": "JWT access_token", "variant": "return" },
+    { "id": "api-request", "from": "browser", "to": "api", "y": 368, "label": "Bearer JWT 請求", "variant": "emphasis", "note": "本地驗證 JWT" },
+    { "id": "api-response", "from": "api", "to": "browser", "y": 397, "label": "200 JSON", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "google", "from": 175, "to": 216, "type": "security" },
+    { "participant": "api", "from": 235, "to": 336, "type": "backend" },
+    { "participant": "google", "from": 265, "to": 280, "type": "security" },
+    { "participant": "db", "from": 295, "to": 310, "type": "database" },
+    { "participant": "api", "from": 363, "to": 400, "type": "backend" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "登入流程", "items": ["Google OAuth → 後端驗證 → 簽發 JWT（30 天）"] },
+    { "dot": "rose", "title": "安全設計", "items": ["JWT sub claim 是唯一身分來源，本地驗證不需對 Google 發請求"] }
+  ]
+}

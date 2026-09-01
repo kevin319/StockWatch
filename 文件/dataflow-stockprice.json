@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "StockWatch 股價資料流",
+    "output": "文件/dataflow-stockprice.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 560]
+  },
+  "stages": [
+    { "label": "資料來源" },
+    { "label": "Provider 路由" },
+    { "label": "快取層" },
+    { "label": "持久化" },
+    { "label": "前端展示" }
+  ],
+  "nodes": [
+    { "id": "finnhub", "type": "external", "label": "Finnhub", "sublabel": "美股報價", "stage": 0, "row": 0 },
+    { "id": "twse", "type": "external", "label": "TWSE", "sublabel": "台股報價", "stage": 0, "row": 1 },
+    { "id": "sina", "type": "external", "label": "新浪財經", "sublabel": "港股/A股", "stage": 0, "row": 2 },
+    { "id": "router", "type": "backend", "label": "Provider 路由", "sublabel": "市場判斷", "stage": 1, "row": 1, "tag": "fallback" },
+    { "id": "yfinance", "type": "external", "label": "yfinance", "sublabel": "通用備源", "stage": 1, "row": 2 },
+    { "id": "mem-cache", "type": "backend", "label": "記憶體快取", "sublabel": "4s~5min TTL", "stage": 2, "row": 0 },
+    { "id": "summary-cache", "type": "backend", "label": "摘要快取", "sublabel": "25hr TTL", "stage": 2, "row": 2 },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "stock_prices", "stage": 3, "row": 1 },
+    { "id": "browser", "type": "frontend", "label": "瀏覽器", "sublabel": "即時報價", "stage": 4, "row": 0 },
+    { "id": "chart", "type": "frontend", "label": "走勢圖", "sublabel": "歷史 OHLCV", "stage": 4, "row": 2 }
+  ],
+  "flows": [
+    { "id": "finnhub-to-router", "from": "finnhub", "to": "router", "label": "REST API", "variant": "emphasis" },
+    { "id": "twse-to-router", "from": "twse", "to": "router", "label": "TWSE API", "labelAt": [155, 230] },
+    { "id": "sina-to-router", "from": "sina", "to": "router", "label": "新浪 API" },
+    { "id": "router-to-yfinance", "from": "router", "to": "yfinance", "label": "Fallback", "variant": "dashed", "labelDy": 24 },
+    { "id": "router-to-cache", "from": "router", "to": "mem-cache", "label": "報價資料", "variant": "emphasis", "labelDx": -40 },
+    { "id": "yfinance-to-cache", "from": "yfinance", "to": "mem-cache", "label": "備源資料", "variant": "dashed", "labelSegment": 0 },
+    { "id": "cache-to-db", "from": "mem-cache", "to": "postgres", "label": "每 10 分鐘寫入", "variant": "dashed" },
+    { "id": "cache-to-browser", "from": "mem-cache", "to": "browser", "label": "JSON 回應", "variant": "emphasis", "route": "straight" },
+    { "id": "db-to-chart", "from": "postgres", "to": "chart", "label": "歷史查詢" },
+    { "id": "db-to-summary", "from": "postgres", "to": "summary-cache", "label": "AI 摘要", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "主要資料路徑", "items": ["各市場由專屬 Provider 優先取得", "失敗時自動 fallback 至 yfinance", "即時報價每 4~15 秒更新"] },
+    { "dot": "amber", "title": "快取策略", "items": ["記憶體快取依市場狀態動態調整 TTL", "報價每 10 分鐘寫入 PostgreSQL", "AI 摘要快取 25 小時"] }
+  ]
+}
