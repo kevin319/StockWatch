@@ -79,7 +79,15 @@ function renderWatchlistDrawer() {
     });
 }
 
-/* ─── 切換清單 ─── */
+/* ─── 切換清單（含相鄰導覽） ─── */
+
+function getAdjacentWatchlistId(direction) {
+    if (watchlists.length < 2) return null;
+    const idx = watchlists.findIndex(w => w.id === currentWatchlistId);
+    const next = idx + direction;
+    if (next < 0 || next >= watchlists.length) return null;
+    return watchlists[next].id;
+}
 
 async function switchWatchlist(id) {
     if (id !== currentWatchlistId) {

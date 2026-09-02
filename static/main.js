@@ -1618,6 +1618,70 @@ async function sendMessage() {
 }
 
 
+/* ═══════ SWIPE TO SWITCH WATCHLIST ═══════ */
+
+(function() {
+    var swipeStartX = 0, swipeStartY = 0, swiping = false, swipeLocked = false;
+    var THRESHOLD = 50;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var el = document.querySelector('.page-content');
+        if (!el) return;
+
+        el.addEventListener('touchstart', function(e) {
+            if (e.target.closest('.drag-handle, .chart-canvas-wrap, .chart-overlay-canvas, .chart-range-btn')) return;
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            swiping = true;
+            swipeLocked = false;
+        }, { passive: true });
+
+        el.addEventListener('touchmove', function(e) {
+            if (!swiping) return;
+            var dx = e.touches[0].clientX - swipeStartX;
+            var dy = e.touches[0].clientY - swipeStartY;
+            if (!swipeLocked && Math.abs(dy) > Math.abs(dx)) { swiping = false; }
+            swipeLocked = true;
+        }, { passive: true });
+
+        el.addEventListener('touchend', function(e) {
+            if (!swiping) return;
+            swiping = false;
+            var dx = e.changedTouches[0].clientX - swipeStartX;
+            if (Math.abs(dx) < THRESHOLD) return;
+            var direction = dx < 0 ? 1 : -1;
+            var nextId = getAdjacentWatchlistId(direction);
+            if (nextId == null) return;
+            slideToWatchlist(nextId, direction);
+        });
+    });
+})();
+
+function slideToWatchlist(id, direction) {
+    var card = document.getElementById('stockListCard');
+    if (!card) { switchWatchlist(id); return; }
+
+    var outClass = direction > 0 ? 'slide-out-left' : 'slide-out-right';
+    var inClass  = direction > 0 ? 'slide-in-right' : 'slide-in-left';
+
+    card.classList.add(outClass);
+    card.addEventListener('transitionend', function handler() {
+        card.removeEventListener('transitionend', handler);
+        currentWatchlistId = id;
+        localStorage.setItem(LS_CURRENT_WATCHLIST, id);
+        updateNavWatchlistName();
+
+        card.classList.remove(outClass);
+        card.classList.add(inClass);
+        loadCurrentWatchlistStocks().finally(function() {
+            requestAnimationFrame(function() {
+                card.classList.remove(inClass);
+            });
+        });
+    }, { once: true });
+}
+
+
 /* ═══════ TOAST ═══════ */
 
 function showToast(message) {

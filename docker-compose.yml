@@ -51,6 +51,12 @@ services:
       - DEEPSEEK_API_URL=${DEEPSEEK_API_URL}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
 networks:

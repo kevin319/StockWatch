@@ -1589,3 +1589,15 @@ body.login-body {
   padding: 12px 20px 16px;
   border-top: 0.5px solid var(--hairline);
 }
+
+
+/* ═══════ SWIPE SLIDE ═══════ */
+
+#stockListCard {
+  transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.28s ease;
+}
+
+#stockListCard.slide-out-left  { transform: translateX(-30%); opacity: 0; }
+#stockListCard.slide-out-right { transform: translateX(30%);  opacity: 0; }
+#stockListCard.slide-in-left   { transform: translateX(-30%); opacity: 0; transition: none; }
+#stockListCard.slide-in-right  { transform: translateX(30%);  opacity: 0; transition: none; }

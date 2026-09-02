@@ -162,6 +162,31 @@ def _compute_asset_version() -> str:
 ASSET_VERSION = _compute_asset_version()
 
 
+@app.get("/health")
+async def health_check():
+    """公開端點：供 Docker / 負載均衡器探測服務是否正常。"""
+    import asyncio
+    try:
+        await asyncio.to_thread(_check_db)
+        db_ok = True
+    except Exception:
+        db_ok = False
+    status = "healthy" if db_ok else "degraded"
+    code = 200 if db_ok else 503
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"status": status, "db": db_ok}, status_code=code)
+
+
+def _check_db() -> None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+    finally:
+        conn.close()
+
+
 @app.get("/version")
 async def get_version():
     """公開端點（不需登入）：前端用來比對自己載入的是不是最新版前端。"""
