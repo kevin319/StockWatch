@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -24,11 +22,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - caddy_net
     volumes:
       # 備份寫到 host，不能放在容器內或 db volume 內——那樣 volume 掛掉時備份會一起沒
       - ./backups:/backups
@@ -51,6 +52,11 @@ services:
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
     restart: unless-stopped
+
+networks:
+  caddy_net:
+    external: true
+    name: artifactsviewer_default
 
 volumes:
   mystock_data:
