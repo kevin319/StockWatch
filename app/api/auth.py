@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 import asyncio
+import json
 import logging
 import os
 from dotenv import load_dotenv
@@ -82,6 +83,37 @@ async def verify_token(token: str):
     except Exception as e:
         logger.error(f"驗證過程發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail="驗證過程發生錯誤")
+
+
+@router.get("/auth/sso")
+async def sso_login(token: str):
+    """Dashboard SSO 登入：驗證由 Dashboard 簽發的短期 token，自動建立 session。"""
+    if not settings.SSO_SECRET:
+        raise HTTPException(status_code=501, detail="SSO 未啟用")
+    try:
+        payload = jwt.decode(token, settings.SSO_SECRET, algorithms=["HS256"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="SSO token 無效或已過期")
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(status_code=401, detail="SSO token 缺少 email")
+
+    name = payload.get("name", "")
+    picture = payload.get("picture", "")
+
+    user = await asyncio.to_thread(upsert_user, email=email, name=name, picture=picture)
+    access_token = _create_access_token(user["email"], user["name"], user["picture_url"])
+
+    user_info = json.dumps(
+        {"email": user["email"], "name": user["name"], "picture": user["picture_url"]},
+        ensure_ascii=False,
+    )
+    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+localStorage.setItem('access_token','{access_token}');
+localStorage.setItem('user_info',{json.dumps(user_info)});
+window.location.href='/home';
+</script></body></html>""")
 
 
 @router.get("/verify_session")

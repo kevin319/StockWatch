@@ -28,4 +28,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    SSO_SECRET: str = os.getenv("SSO_SECRET", "")
+
 settings = Settings()
