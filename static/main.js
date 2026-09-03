@@ -1,3 +1,8 @@
+function _fmtNum(v, ticker) {
+    if (ticker && ticker.includes('=X')) return String(parseFloat(Number(v).toPrecision(10)));
+    return Number(v).toFixed(2);
+}
+
 /* ═══════ 認證後的 API 呼叫 ═══════ */
 
 // 所有需要登入的後端呼叫都走這裡：自動帶上 Bearer token；
@@ -59,6 +64,14 @@ function setTheme(theme) {
 
 function showChart() { return localStorage.getItem('sw-show-chart') !== 'false'; }
 function showSummary() { return localStorage.getItem('sw-show-summary') !== 'false'; }
+function groupCollapseMode() { return localStorage.getItem('sw-group-collapse') || 'all-open'; }
+function setGroupCollapseMode(v) {
+    localStorage.setItem('sw-group-collapse', v);
+    collapsedGroups = {};
+    renderStocks();
+    updateGroupCollapseToggle();
+}
+var collapsedGroups = {};
 
 function setShowChart(v) {
     localStorage.setItem('sw-show-chart', v ? 'true' : 'false');
@@ -74,6 +87,25 @@ function setShowSummary(v) {
         var detail = document.querySelector('.stock-detail');
         if (detail) detail.innerHTML = detailHtml(expandedTicker);
     }
+}
+
+function updateGroupCollapseToggle() {
+    var toggle = document.getElementById('groupCollapseToggle');
+    if (!toggle) return;
+    var mode = groupCollapseMode();
+    toggle.querySelectorAll('.seg-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    var thumb = toggle.querySelector('.seg-thumb');
+    if (thumb) {
+        var activeBtn = toggle.querySelector('.seg-btn.active');
+        if (activeBtn) thumb.style.transform = 'translateX(' + activeBtn.offsetLeft + 'px)';
+    }
+}
+
+function toggleGroupCollapse(groupKey) {
+    collapsedGroups[groupKey] = !collapsedGroups[groupKey];
+    renderStocks();
 }
 
 function updateThemeToggle(theme) {
@@ -195,6 +227,7 @@ function toggleSettingsPage() {
         var ts = document.getElementById('toggleSummary');
         if (tc) tc.checked = showChart();
         if (ts) ts.checked = showSummary();
+        updateGroupCollapseToggle();
         renderSettingsStockList();
     }
 }
@@ -351,7 +384,39 @@ function renderStocks() {
         return;
     }
 
+    let lastGroupId = undefined;
+    const hasAnyGroup = stocks.some(s => s.group_id);
+    let groupIndex = 0;
+
     stocks.forEach((stock, index) => {
+        // 分組標題列
+        if (hasAnyGroup && stock.group_id !== lastGroupId) {
+            lastGroupId = stock.group_id;
+            const groupKey = stock.group_id || '_ungrouped';
+            if (!(groupKey in collapsedGroups)) {
+                const mode = groupCollapseMode();
+                collapsedGroups[groupKey] = mode === 'first-open' ? groupIndex > 0 : false;
+            }
+            const isCollapsed = collapsedGroups[groupKey];
+            const hdr = document.createElement('div');
+            hdr.className = 'group-header' + (isCollapsed ? ' collapsed' : '');
+            const label = stock.group_id ? stock.group_name : '未分組';
+            const desc = stock.group_id ? (stock.group_description || '') : '';
+            const count = stocks.filter(s => (s.group_id || '_ungrouped') === groupKey).length;
+            hdr.innerHTML = `<svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`
+                + `<span class="group-header-name">${escapeHtml(label)}</span>`
+                + `<span class="group-header-count">${count}</span>`
+                + (desc ? `<span class="group-header-desc">${escapeHtml(desc)}</span>` : '');
+            hdr.addEventListener('click', () => toggleGroupCollapse(groupKey));
+            stockList.appendChild(hdr);
+            groupIndex++;
+        }
+
+        if (hasAnyGroup) {
+            const groupKey = stock.group_id || '_ungrouped';
+            if (collapsedGroups[groupKey]) return;
+        }
+
         // 平盤（漲跌趨近 0）中性灰、不帶正負號——+0.00% 標紅是資訊謊言
         const flat = Math.abs(stock.price_change_percent) < 0.005;
         const up = stock.price_change >= 0;
@@ -382,14 +447,14 @@ function renderStocks() {
                 <div class="ty-subtitle">${(stock.company_name && stock.company_name !== stock.ticker) ? stock.company_name : ''}</div>
             </div>
             <div class="row-price">
-                <span class="price-main">${stock.price.toFixed(2)}</span>
-                ${hasExtended ? `<span class="ext-price">${extLabel} ${stock.extended_price.toFixed(2)}</span>` : ''}
+                <span class="price-main">${_fmtNum(stock.price, stock.ticker)}</span>
+                ${hasExtended ? `<span class="ext-price">${extLabel} ${_fmtNum(stock.extended_price, stock.ticker)}</span>` : ''}
             </div>
             <div class="row-change">
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
                 ${hasExtended
                     ? `<span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>`
-                    : `<span class="ext-change ${changeClass}">${arrow}${stock.price_change.toFixed(2)}</span>`}
+                    : `<span class="ext-change ${changeClass}">${arrow}${_fmtNum(stock.price_change, stock.ticker)}</span>`}
             </div>`;
         row.addEventListener('click', () => toggleExpand(stock.ticker));
         item.appendChild(row);
@@ -547,7 +612,7 @@ function week52RangeHtml(ticker, d) {
     return `<div class="range52">
         <div class="metric-label">52週區間</div>
         <div class="range52-bar"><div class="range52-dot" style="left:${pos.toFixed(1)}%"></div></div>
-        <div class="range52-ends"><span>${lo.toFixed(2)}</span><span>${hi.toFixed(2)}</span></div>
+        <div class="range52-ends"><span>${_fmtNum(lo, ticker)}</span><span>${_fmtNum(hi, ticker)}</span></div>
     </div>`;
 }
 
@@ -610,16 +675,17 @@ function openStockChat(ticker) {
 const CHART_RANGES = ['24H','5D','1M','3M','1Y','5Y','Max'];
 const CHART_RANGE_KEYS = ['24h','5d','1m','3m','1y','5y','max'];
 
-function _fmtPrice(v) {
+function _fmtPrice(v, ticker) {
     if (v == null || isNaN(v)) return '—';
+    if (ticker && ticker.includes('=X')) return String(parseFloat(Number(v).toPrecision(10)));
     return v >= 1000 ? v.toFixed(0) : v.toFixed(2);
 }
 
-function _maLegendHtml(ma20v, ma60v, ma120v, bbU, bbL) {
-    return '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-20"></span>MA20:<b>' + _fmtPrice(ma20v) + '</b></span>'
-        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-60"></span>MA60:<b>' + _fmtPrice(ma60v) + '</b></span>'
-        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-120"></span>MA120:<b>' + _fmtPrice(ma120v) + '</b></span>'
-        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-bb"></span>BB:<b>' + _fmtPrice(bbU) + '/' + _fmtPrice(bbL) + '</b></span>';
+function _maLegendHtml(ma20v, ma60v, ma120v, bbU, bbL, ticker) {
+    return '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-20"></span>MA20:<b>' + _fmtPrice(ma20v, ticker) + '</b></span>'
+        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-60"></span>MA60:<b>' + _fmtPrice(ma60v, ticker) + '</b></span>'
+        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-120"></span>MA120:<b>' + _fmtPrice(ma120v, ticker) + '</b></span>'
+        + '<span class="chart-ma-item"><span class="chart-ma-dot chart-ma-dot-bb"></span>BB:<b>' + _fmtPrice(bbU, ticker) + '/' + _fmtPrice(bbL, ticker) + '</b></span>';
 }
 
 function _pctVsAvg(v, avg) {
@@ -642,7 +708,7 @@ function chartSectionHtml(ticker) {
     // MA 圖例列（永遠顯示三項，避免 hover 時高度跳動）
     var maHtml = '';
     if (hasData) {
-        maHtml = '<div class="chart-ma-legend">' + _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120), _lastNonNull(d.bb_upper), _lastNonNull(d.bb_lower)) + '</div>';
+        maHtml = '<div class="chart-ma-legend">' + _maLegendHtml(_lastNonNull(d.ma20), _lastNonNull(d.ma60), _lastNonNull(d.ma120), _lastNonNull(d.bb_upper), _lastNonNull(d.bb_lower), ticker) + '</div>';
     }
 
     var safeId = ticker.replace(/\./g, '_');
@@ -663,10 +729,10 @@ function chartSectionHtml(ticker) {
         body = '<div class="chart-canvas-wrap" id="chartWrap_' + safeId + '">'
             + '<canvas id="chartCanvas_' + safeId + '"></canvas>'
             + '<canvas id="chartOverlay_' + safeId + '" class="chart-overlay-canvas"></canvas>'
-            + '<div class="chart-overlay chart-overlay-tl"><span class="chart-ov-price price-up">' + _fmtPrice(hi) + '</span></div>'
+            + '<div class="chart-overlay chart-overlay-tl"><span class="chart-ov-price price-up">' + _fmtPrice(hi, ticker) + '</span></div>'
             + '<div class="chart-overlay chart-overlay-tr"><span class="price-up">' + hiPct + '</span></div>'
-            + '<div class="chart-overlay chart-overlay-avg"><span class="chart-ov-avg">' + _fmtPrice(avg) + '</span></div>'
-            + '<div class="chart-overlay chart-overlay-bl"><span class="chart-ov-price price-down">' + _fmtPrice(lo) + '</span></div>'
+            + '<div class="chart-overlay chart-overlay-avg"><span class="chart-ov-avg">' + _fmtPrice(avg, ticker) + '</span></div>'
+            + '<div class="chart-overlay chart-overlay-bl"><span class="chart-ov-price price-down">' + _fmtPrice(lo, ticker) + '</span></div>'
             + '<div class="chart-overlay chart-overlay-br"><span class="price-down">' + loPct + '</span></div>'
             + '</div>';
     }
@@ -1034,18 +1100,19 @@ function _updateHoverInfo(safeId, idx) {
     var bbUv = (d.bb_upper && d.bb_upper[idx] != null) ? d.bb_upper[idx] : null;
     var bbLv = (d.bb_lower && d.bb_lower[idx] != null) ? d.bb_lower[idx] : null;
 
+    var tk = geo.ticker;
     var html = '<span class="hover-date">' + date + '</span> '
-        + '<span class="' + chgClass + '">' + _fmtPrice(price) + '</span> '
-        + '<span class="' + chgClass + '">' + arrow + chg.toFixed(2) + '</span> '
+        + '<span class="' + chgClass + '">' + _fmtPrice(price, tk) + '</span> '
+        + '<span class="' + chgClass + '">' + arrow + _fmtNum(chg, tk) + '</span> '
         + '<span class="' + chgClass + '">' + arrow + chgPct.toFixed(2) + '%</span>';
-    if (d.avg != null) html += ' <span class="hover-avg">Avg:' + _fmtPrice(d.avg) + '</span>';
+    if (d.avg != null) html += ' <span class="hover-avg">Avg:' + _fmtPrice(d.avg, tk) + '</span>';
     if (vol) html += ' <span class="hover-vol">Vol:' + _fmtVol(vol) + '</span>';
 
     el.innerHTML = html;
     el.classList.remove('hover-idle');
 
     var maEl = el.parentElement.querySelector('.chart-ma-legend');
-    if (maEl) maEl.innerHTML = _maLegendHtml(ma20v, ma60v, ma120v, bbUv, bbLv);
+    if (maEl) maEl.innerHTML = _maLegendHtml(ma20v, ma60v, ma120v, bbUv, bbLv, tk);
 }
 
 function _hideHoverInfo(safeId) {
@@ -1668,6 +1735,7 @@ function slideToWatchlist(id, direction) {
     card.addEventListener('transitionend', function handler() {
         card.removeEventListener('transitionend', handler);
         currentWatchlistId = id;
+        collapsedGroups = {};
         localStorage.setItem(LS_CURRENT_WATCHLIST, id);
         updateNavWatchlistName();
 

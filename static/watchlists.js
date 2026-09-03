@@ -44,6 +44,28 @@ function updateNavWatchlistName() {
     if (!el) return;
     const current = getCurrentWatchlist();
     el.textContent = current ? current.name : '自選股';
+    const descEl = document.getElementById('navWatchlistDesc');
+    if (descEl) descEl.textContent = (current && current.description) ? current.description : '';
+    updateNavArrows();
+}
+
+function updateNavArrows() {
+    const prev = document.getElementById('navPrev');
+    const next = document.getElementById('navNext');
+    if (!prev || !next) return;
+    const idx = watchlists.findIndex(w => w.id === currentWatchlistId);
+    prev.hidden = idx <= 0;
+    next.hidden = idx < 0 || idx >= watchlists.length - 1;
+}
+
+function navPrevList() {
+    var id = getAdjacentWatchlistId(-1);
+    if (id != null) slideToWatchlist(id, -1);
+}
+
+function navNextList() {
+    var id = getAdjacentWatchlistId(1);
+    if (id != null) slideToWatchlist(id, 1);
 }
 
 /* ─── 抽屜開合 ─── */
@@ -92,6 +114,7 @@ function getAdjacentWatchlistId(direction) {
 async function switchWatchlist(id) {
     if (id !== currentWatchlistId) {
         currentWatchlistId = id;
+        collapsedGroups = {};
         localStorage.setItem(LS_CURRENT_WATCHLIST, id);
         updateNavWatchlistName();
         try {
@@ -128,7 +151,10 @@ function renderWatchlistRow(list, index) {
     if (!drawerManageMode) {
         row.innerHTML = `
             <div class="drawer-row-bar"></div>
-            <div class="drawer-row-name">${escapeHtml(list.name)}</div>
+            <div class="drawer-row-info">
+                <div class="drawer-row-name">${escapeHtml(list.name)}</div>
+                ${list.description ? `<div class="drawer-row-desc">${escapeHtml(list.description)}</div>` : ''}
+            </div>
             <div class="drawer-row-count">${list.count}</div>`;
         row.addEventListener('click', () => switchWatchlist(list.id));
         return row;
@@ -191,45 +217,61 @@ function startRenameWatchlist(id) {
     if (!row) return;
 
     const nameEl = row.querySelector('.drawer-row-name');
-    const original = watchlists[index].name;
-    nameEl.innerHTML = `<input type="text" class="drawer-name-input" maxlength="50" value="${escapeHtml(original)}">`;
+    if (nameEl.querySelector('input')) return;
 
-    const input = nameEl.querySelector('input');
-    input.focus();
-    input.select();
+    const list = watchlists[index];
+    nameEl.innerHTML = `
+        <input type="text" class="drawer-name-input" maxlength="50" value="${escapeHtml(list.name)}" placeholder="清單名稱">
+        <input type="text" class="drawer-desc-input" maxlength="200" value="${escapeHtml(list.description || '')}" placeholder="說明（選填）">`;
+
+    const nameInput = nameEl.querySelector('.drawer-name-input');
+    const descInput = nameEl.querySelector('.drawer-desc-input');
+    nameInput.focus();
+    nameInput.select();
 
     let done = false;
     const commit = async () => {
         if (done) return;
         done = true;
-        const name = input.value.trim();
-        if (!name || name === original) { renderWatchlistDrawer(); return; }
-        await renameWatchlist(id, name);
+        const name = nameInput.value.trim();
+        const desc = descInput.value.trim();
+        if (!name || (name === list.name && desc === (list.description || ''))) {
+            renderWatchlistDrawer();
+            return;
+        }
+        await renameWatchlist(id, name, desc);
     };
 
-    input.addEventListener('blur', commit);
-    input.addEventListener('keydown', (e) => {
+    const onKey = (e) => {
         if (e.key === 'Enter') commit();
         if (e.key === 'Escape') { e.stopPropagation(); done = true; renderWatchlistDrawer(); }
-    });
+    };
+    nameInput.addEventListener('keydown', onKey);
+    descInput.addEventListener('keydown', onKey);
+    descInput.addEventListener('blur', commit);
 }
 
-async function renameWatchlist(id, name) {
+async function renameWatchlist(id, name, description) {
     const email = getCurrentUserEmail();
     if (!email) return;
     try {
+        const body = { name };
+        if (description !== undefined) body.description = description;
         const response = await authFetch('/watchlists/' + id, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name }),
+            body: JSON.stringify(body),
         });
         if (!response.ok) {
-            const body = await response.json().catch(() => ({}));
-            throw new Error(body.detail || '改名失敗');
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || '改名失敗');
         }
         const updated = await response.json();
         const index = watchlists.findIndex(w => w.id === id);
-        if (index >= 0) watchlists[index].name = updated.name;
+        if (index >= 0) {
+            watchlists[index].name = updated.name;
+            watchlists[index].description = updated.description || '';
+        }
         updateNavWatchlistName();
     } catch (error) {
         showToast(error.message);
@@ -428,6 +470,289 @@ async function submitListPicker() {
         if (affectsCurrent || !ids.length) await loadCurrentWatchlistStocks();
 
         showToast(ids.length ? '已加入 ' + ids.length + ' 個清單' : '已從所有清單移除');
+    } catch (error) {
+        showToast(error.message);
+    }
+}
+
+
+/* ═══════ 分組管理 ═══════ */
+
+let currentGroups = [];
+
+async function openGroupManager() {
+    if (!currentWatchlistId) return;
+    await loadGroups();
+    renderGroupManager();
+    document.getElementById('groupManagerWrap').classList.remove('hidden');
+}
+
+function closeGroupManager() {
+    document.getElementById('groupManagerWrap').classList.add('hidden');
+    document.getElementById('groupNewForm').classList.add('hidden');
+    loadCurrentWatchlistStocks();
+}
+
+async function loadGroups() {
+    try {
+        const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups');
+        if (response.ok) currentGroups = await response.json();
+    } catch (error) {
+        console.error('載入分組失敗:', error);
+    }
+}
+
+function renderGroupManager() {
+    const container = document.getElementById('groupManagerList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!currentGroups.length) {
+        container.innerHTML = '<div style="padding:20px 4px;color:var(--text-tertiary);font-size:13px">還沒有分組，點下方「新增分組」建立</div>';
+        return;
+    }
+
+    currentGroups.forEach((group, idx) => {
+        const row = document.createElement('div');
+        row.className = 'drawer-row manage';
+        row.dataset.index = idx;
+        row.innerHTML = `
+            <div class="drawer-row-bar"></div>
+            <div class="drawer-row-info" style="min-width:0">
+                <div class="drawer-row-name">${escapeHtml(group.name)}</div>
+                ${group.description ? `<div class="drawer-row-desc">${escapeHtml(group.description)}</div>` : ''}
+                <div style="font:400 12px/1.3 var(--font);color:var(--text-tertiary);margin-top:2px">${group.count ?? 0} 檔</div>
+            </div>
+            <div class="drawer-row-actions">
+                <button class="drawer-action-btn" onclick="event.stopPropagation();openGroupStockPicker(${group.id},'${escapeHtml(group.name)}')" title="管理股票">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+                </button>
+                <button class="drawer-action-btn" onclick="event.stopPropagation();deleteGroup(${group.id})" title="刪除">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+            </div>
+            <div class="drawer-drag drag-handle">${SVG_DRAG}</div>`;
+        row.querySelector('.drawer-row-info').addEventListener('click', () => promptRenameGroup(group));
+        attachDragHandlers(row.querySelector('.drawer-drag'), {
+            containerId: 'groupManagerList',
+            rowSelector: '.drawer-row',
+            onReorder: (from, to) => {
+                const item = currentGroups[from];
+                currentGroups.splice(from, 1);
+                currentGroups.splice(to, 0, item);
+                renderGroupManager();
+                saveGroupOrder();
+            },
+        });
+        container.appendChild(row);
+    });
+}
+
+function showNewGroupForm() {
+    const form = document.getElementById('groupNewForm');
+    form.classList.remove('hidden');
+    const nameInput = document.getElementById('newGroupInput');
+    const descInput = document.getElementById('newGroupDescInput');
+    nameInput.value = '';
+    descInput.value = '';
+    nameInput.focus();
+    const submit = async () => {
+        const name = nameInput.value.trim();
+        if (!name) return;
+        const desc = descInput.value.trim();
+        try {
+            const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description: desc }),
+            });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.detail || '建立分組失敗');
+            }
+            form.classList.add('hidden');
+            await loadGroups();
+            renderGroupManager();
+            showToast('已建立分組「' + name + '」');
+        } catch (error) {
+            showToast(error.message);
+        }
+    };
+    const onKey = (e) => {
+        if (e.key === 'Enter') submit();
+        else if (e.key === 'Escape') form.classList.add('hidden');
+    };
+    nameInput.onkeydown = onKey;
+    descInput.onkeydown = onKey;
+}
+
+function promptRenameGroup(group) {
+    const rows = document.querySelectorAll('#groupManagerList .drawer-row');
+    const row = [...rows].find(r => {
+        const nameEl = r.querySelector('.drawer-row-name');
+        return nameEl && nameEl.textContent === group.name;
+    });
+    if (!row) return;
+
+    const infoEl = row.querySelector('.drawer-row-info');
+    if (infoEl.querySelector('input')) return;
+
+    infoEl.innerHTML = `
+        <input type="text" class="drawer-name-input" maxlength="50" value="${escapeHtml(group.name)}" placeholder="分組名稱">
+        <input type="text" class="drawer-desc-input" maxlength="200" value="${escapeHtml(group.description || '')}" placeholder="說明（選填）">`;
+
+    const nameInput = infoEl.querySelector('.drawer-name-input');
+    const descInput = infoEl.querySelector('.drawer-desc-input');
+    nameInput.focus();
+    nameInput.select();
+
+    let done = false;
+    const commit = async () => {
+        if (done) return;
+        done = true;
+        const name = nameInput.value.trim();
+        const desc = descInput.value.trim();
+        if (!name || (name === group.name && desc === (group.description || ''))) {
+            await loadGroups();
+            renderGroupManager();
+            return;
+        }
+        try {
+            const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups/' + group.id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description: desc }),
+            });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.detail || '更新失敗');
+            }
+            await loadGroups();
+            renderGroupManager();
+            showToast('已更新');
+        } catch (error) {
+            showToast(error.message);
+            await loadGroups();
+            renderGroupManager();
+        }
+    };
+
+    const onKey = (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { e.stopPropagation(); done = true; loadGroups().then(renderGroupManager); }
+    };
+    nameInput.addEventListener('keydown', onKey);
+    descInput.addEventListener('keydown', onKey);
+    nameInput.addEventListener('blur', () => setTimeout(() => { if (!infoEl.contains(document.activeElement)) commit(); }, 100));
+    descInput.addEventListener('blur', () => setTimeout(() => { if (!infoEl.contains(document.activeElement)) commit(); }, 100));
+}
+
+async function saveGroupOrder() {
+    try {
+        await authFetch('/watchlists/' + currentWatchlistId + '/groups/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: currentGroups.map(g => g.id) }),
+        });
+    } catch (error) {
+        console.error('更新分組順序失敗:', error);
+        showToast('更新分組順序失敗');
+    }
+}
+
+async function deleteGroup(groupId) {
+    if (!confirm('刪除分組？股票不會被移除，只是回到未分組狀態。')) return;
+    try {
+        const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups/' + groupId, {
+            method: 'DELETE',
+        });
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || '刪除分組失敗');
+        }
+        await loadGroups();
+        renderGroupManager();
+        showToast('已刪除分組');
+    } catch (error) {
+        showToast(error.message);
+    }
+}
+
+
+/* ═══════ 分組股票選擇器 ═══════ */
+
+let groupPickerGroupId = null;
+let groupPickerSelected = new Set();
+
+async function openGroupStockPicker(groupId, groupName) {
+    groupPickerGroupId = groupId;
+    groupPickerSelected = new Set();
+
+    document.getElementById('groupPickerName').textContent = groupName;
+
+    try {
+        const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups/' + groupId + '/stocks');
+        if (response.ok) {
+            (await response.json()).forEach(t => groupPickerSelected.add(t));
+        }
+    } catch (error) {
+        console.error('取得分組股票失敗:', error);
+    }
+
+    renderGroupStockPicker();
+    document.getElementById('groupStockPickerWrap').classList.remove('hidden');
+}
+
+function renderGroupStockPicker() {
+    const container = document.getElementById('groupPickerList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!stocks || !stocks.length) {
+        container.innerHTML = '<div style="padding:20px;color:var(--text-tertiary);font-size:13px">清單中沒有股票</div>';
+        return;
+    }
+
+    stocks.forEach(stock => {
+        const checked = groupPickerSelected.has(stock.ticker);
+        const row = document.createElement('div');
+        row.className = 'picker-row' + (checked ? ' checked' : '');
+        row.innerHTML = `
+            <span class="picker-row-name">${stock.ticker}${stock.company_name && stock.company_name !== stock.ticker ? ' — ' + escapeHtml(stock.company_name) : ''}</span>
+            <span class="picker-check">${SVG_CHECK}</span>`;
+        row.addEventListener('click', () => {
+            if (groupPickerSelected.has(stock.ticker)) groupPickerSelected.delete(stock.ticker);
+            else groupPickerSelected.add(stock.ticker);
+            renderGroupStockPicker();
+        });
+        container.appendChild(row);
+    });
+}
+
+function closeGroupStockPicker() {
+    document.getElementById('groupStockPickerWrap').classList.add('hidden');
+    groupPickerGroupId = null;
+    groupPickerSelected = new Set();
+}
+
+async function submitGroupStockPicker() {
+    const groupId = groupPickerGroupId;
+    const tickers = Array.from(groupPickerSelected);
+    closeGroupStockPicker();
+
+    try {
+        const response = await authFetch('/watchlists/' + currentWatchlistId + '/groups/' + groupId + '/stocks', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tickers }),
+        });
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || '更新分組股票失敗');
+        }
+        await loadGroups();
+        renderGroupManager();
+        showToast('已更新分組');
     } catch (error) {
         showToast(error.message);
     }

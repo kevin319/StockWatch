@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.api import auth, stock, chat, watchlists
 from app.models.db import get_db_connection
 from app.models.backup import run_backup
-from app.models.migrations import ensure_watchlist_groups
+from app.models.migrations import ensure_watchlist_groups, ensure_watchlist_subgroups
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,11 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(ensure_watchlist_groups)
     except Exception as e:
         logger.error(f"watchlist groups 遷移失敗: {e}")
+
+    try:
+        await asyncio.to_thread(ensure_watchlist_subgroups)
+    except Exception as e:
+        logger.error(f"watchlist subgroups 遷移失敗: {e}")
 
     # 啟動時先備份一次：確保隨時都有一份近期備份，設定錯誤也會立刻在 log 曝光
     try:

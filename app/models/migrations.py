@@ -9,8 +9,8 @@ from app.models.db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
-# 遷移時給既有使用者建立的預設清單名稱
 DEFAULT_WATCHLIST_NAME = "自選股"
+GROUP_NAME_MAX_LEN = 50
 
 
 def ensure_watchlist_groups() -> None:
@@ -93,6 +93,63 @@ def ensure_watchlist_groups() -> None:
         cur.execute(
             """CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_watchlist_ticker
                    ON watchlist_stocks(watchlist_id, ticker);"""
+        )
+
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def ensure_watchlist_subgroups() -> None:
+    """建立清單內子分組機制：watchlist_groups 表 + watchlist_stocks.group_id + description 欄位。"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # 1. watchlists 加 description 欄位
+        cur.execute(
+            "ALTER TABLE watchlists ADD COLUMN IF NOT EXISTS description VARCHAR(200) DEFAULT '';"
+        )
+
+        # 2. 建立 watchlist_groups 表
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS watchlist_groups (
+                   id SERIAL PRIMARY KEY,
+                   watchlist_id INTEGER NOT NULL
+                       REFERENCES watchlists(id) ON DELETE CASCADE,
+                   name VARCHAR(50) NOT NULL,
+                   description VARCHAR(200) DEFAULT '',
+                   display_order INTEGER NOT NULL DEFAULT 0,
+                   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+               );"""
+        )
+        cur.execute(
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_group_name
+                   ON watchlist_groups(watchlist_id, lower(name));"""
+        )
+        cur.execute(
+            """CREATE INDEX IF NOT EXISTS idx_groups_watchlist
+                   ON watchlist_groups(watchlist_id, display_order);"""
+        )
+
+        # 3. watchlist_stocks 加 group_id (nullable FK, ON DELETE SET NULL)
+        cur.execute(
+            "ALTER TABLE watchlist_stocks ADD COLUMN IF NOT EXISTS group_id INTEGER;"
+        )
+        cur.execute(
+            """DO $$
+               BEGIN
+                   IF NOT EXISTS (
+                       SELECT 1 FROM information_schema.table_constraints
+                       WHERE constraint_name = 'fk_watchlist_stocks_group'
+                         AND table_name = 'watchlist_stocks'
+                   ) THEN
+                       ALTER TABLE watchlist_stocks
+                           ADD CONSTRAINT fk_watchlist_stocks_group
+                           FOREIGN KEY (group_id)
+                           REFERENCES watchlist_groups(id) ON DELETE SET NULL;
+                   END IF;
+               END $$;"""
         )
 
         conn.commit()
