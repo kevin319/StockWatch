@@ -206,7 +206,7 @@
             })
             .then(r => { if (!r.ok) throw new Error('Session 驗證失敗'); return r.json(); })
             .then(data => { if (!data.valid) logout(); })
-            .catch(() => logout());
+            .catch(() => {});
         };
 
         function logout() {
