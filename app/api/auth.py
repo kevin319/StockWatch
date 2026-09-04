@@ -49,8 +49,10 @@ async def verify_token(token: str):
             raise HTTPException(status_code=500, detail="未設定 Google Client ID")
 
         # 驗證 Google Token（會對 Google 發網路請求，丟到執行緒避免阻塞 event loop）
+        # clock_skew: Docker 容器時鐘可能與 Google 有數秒偏差
         idinfo = await asyncio.to_thread(
-            id_token.verify_oauth2_token, token, requests.Request(), client_id)
+            id_token.verify_oauth2_token, token, requests.Request(), client_id,
+            clock_skew_in_seconds=5)
 
         if idinfo['aud'] != client_id:
             raise ValueError('錯誤的 Client ID')

@@ -74,6 +74,9 @@
 
     <!-- Stock List -->
     <main class="page-content">
+        <div class="ptr-indicator" id="ptrIndicator">
+            <svg class="ptr-spinner" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-dasharray="42 14" stroke-linecap="round"/></svg>
+        </div>
         <div class="v2-card" id="stockListCard">
             <div id="stockList"></div>
         </div>
@@ -113,8 +116,8 @@
             </button>
             <span class="sheet-title">管理分組</span>
         </div>
-        <div id="groupManagerList" class="drawer-list" style="padding:0 16px"></div>
-        <div id="groupNewForm" class="drawer-new-form hidden" style="padding:0 16px">
+        <div id="groupManagerList" class="drawer-list"></div>
+        <div id="groupNewForm" class="drawer-new-form hidden">
             <input type="text" id="newGroupInput" maxlength="50" placeholder="分組名稱">
             <input type="text" id="newGroupDescInput" class="drawer-desc-input" maxlength="200" placeholder="說明（選填），按 Enter 建立">
         </div>
@@ -167,8 +170,8 @@
                 <div class="settings-row-simple">
                     <span class="settings-row-label">主題</span>
                     <div class="segmented-control" id="themeToggle">
-                        <button class="seg-btn" data-theme="light" onclick="setTheme('light')">淺色</button>
-                        <button class="seg-btn active" data-theme="dark" onclick="setTheme('dark')">深色</button>
+                        <button class="seg-btn" data-value="light" onclick="setTheme('light')">淺色</button>
+                        <button class="seg-btn active" data-value="dark" onclick="setTheme('dark')">深色</button>
                         <div class="seg-thumb"></div>
                     </div>
                 </div>
@@ -185,14 +188,14 @@
                         <span class="toggle-track"></span>
                     </label>
                 </div>
-                <div class="settings-row-simple" style="border-top: 0.5px solid var(--hairline)">
+                <div class="settings-row-simple">
                     <span class="settings-row-label">AI 摘要</span>
                     <label class="toggle-switch">
                         <input type="checkbox" id="toggleSummary" onchange="setShowSummary(this.checked)">
                         <span class="toggle-track"></span>
                     </label>
                 </div>
-                <div class="settings-row-simple" style="border-top: 0.5px solid var(--hairline)">
+                <div class="settings-row-simple">
                     <span class="settings-row-label">分組收合</span>
                     <div class="segmented-control" id="groupCollapseToggle">
                         <button class="seg-btn active" data-mode="all-open" onclick="setGroupCollapseMode('all-open')">全部展開</button>

@@ -122,7 +122,7 @@ function updateThemeToggle(theme) {
     if (!toggle) return;
     var buttons = toggle.querySelectorAll('.seg-btn');
     buttons.forEach(function(btn) {
-        btn.classList.toggle('active', btn.dataset.theme === theme);
+        btn.classList.toggle('active', btn.dataset.value === theme);
     });
     var thumb = toggle.querySelector('.seg-thumb');
     if (thumb) {
@@ -153,6 +153,10 @@ function getTileGradient(ticker) {
     }
     return TILE_GRADIENTS[Math.abs(hash) % TILE_GRADIENTS.length];
 }
+
+const _logoCache = {};
+function cacheLogoUrl(ticker, url) { if (url) _logoCache[ticker] = url; }
+function getCachedLogo(ticker) { return _logoCache[ticker] || null; }
 
 const SVG_DRAG = '<svg width="14" height="18" viewBox="0 0 14 18" fill="none"><circle cx="4" cy="3" r="1.2" fill="currentColor"/><circle cx="10" cy="3" r="1.2" fill="currentColor"/><circle cx="4" cy="9" r="1.2" fill="currentColor"/><circle cx="10" cy="9" r="1.2" fill="currentColor"/><circle cx="4" cy="15" r="1.2" fill="currentColor"/><circle cx="10" cy="15" r="1.2" fill="currentColor"/></svg>';
 
@@ -351,9 +355,11 @@ function renderMarketClock() {
 function tileHtml(stock) {
     const grad = getTileGradient(stock.ticker);
     const label = (stock.company_name || stock.ticker || '?').trim().charAt(0).toUpperCase();
-    if (stock.logo_url) {
+    const logoUrl = stock.logo_url || getCachedLogo(stock.ticker);
+    if (logoUrl) {
+        cacheLogoUrl(stock.ticker, logoUrl);
         return `<div class="v2-tile">
-            <img src="${stock.logo_url}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <img src="${logoUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
             <span class="tile-initial" style="display:none;background:${grad}">${label}</span>
         </div>`;
     }
@@ -594,16 +600,7 @@ function refreshSummary(ticker) {
     });
 }
 
-function _showToast(msg) {
-    var existing = document.querySelector('.sw-toast');
-    if (existing) existing.remove();
-    var el = document.createElement('div');
-    el.className = 'sw-toast';
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(function() { el.classList.add('show'); }, 10);
-    setTimeout(function() { el.classList.remove('show'); setTimeout(function() { el.remove(); }, 300); }, 2500);
-}
+function _showToast(msg) { showToast(msg); }
 
 // 展開面板 HTML：基本面 grid + 走勢圖（可關）+ AI 摘要（可關）
 function detailHtml(ticker) {
@@ -865,10 +862,15 @@ function switchChartRange(ticker, range) {
 }
 
 function _replaceChartBody(ticker) {
-    var section = document.querySelector('.chart-section');
-    if (!section) return;
-    var detail = document.querySelector('.stock-detail');
-    if (detail) { detail.innerHTML = detailHtml(ticker); scheduleChartRender(ticker); }
+    var oldSection = document.querySelector('.chart-section');
+    if (!oldSection) return;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = chartSectionHtml(ticker);
+    var newSection = tmp.firstElementChild;
+    if (newSection) {
+        oldSection.replaceWith(newSection);
+        scheduleChartRender(ticker);
+    }
 }
 
 function scheduleChartRender(ticker) {
@@ -1238,28 +1240,40 @@ function renderSettingsStockList() {
 
 /* ═══════ STOCK CRUD ═══════ */
 
+let _undoTimer = null;
 async function removeStock(ticker) {
-    try {
-        const userInfo = JSON.parse(localStorage.getItem('user_info'));
-        if (!userInfo || !userInfo.email) throw new Error('找不到使用者資訊');
+    const idx = stocks.findIndex(s => s.ticker === ticker);
+    if (idx < 0) return;
+    const removed = stocks.splice(idx, 1)[0];
+    renderSettingsStockList();
+    renderStocks();
+    const list = watchlists.find(w => w.id === currentWatchlistId);
+    if (list) list.count = stocks.length;
 
-        const response = await authFetch(
-            '/watchlists/' + currentWatchlistId + '/stocks/' + encodeURIComponent(ticker),
-            { method: 'DELETE' }
-        );
-        if (!response.ok) throw new Error('移除股票失敗');
+    if (_undoTimer) clearTimeout(_undoTimer);
+    showUndoToast('已移除 ' + ticker, () => {
+        stocks.splice(idx, 0, removed);
+        renderSettingsStockList();
+        renderStocks();
+        if (list) list.count = stocks.length;
+    });
 
-        const idx = stocks.findIndex(s => s.ticker === ticker);
-        if (idx >= 0) {
-            stocks.splice(idx, 1);
+    _undoTimer = setTimeout(async () => {
+        try {
+            const response = await authFetch(
+                '/watchlists/' + currentWatchlistId + '/stocks/' + encodeURIComponent(ticker),
+                { method: 'DELETE' }
+            );
+            if (!response.ok) throw new Error('移除股票失敗');
+        } catch (error) {
+            console.error('移除股票時發生錯誤:', error);
+            stocks.splice(idx, 0, removed);
             renderSettingsStockList();
             renderStocks();
-            const list = watchlists.find(w => w.id === currentWatchlistId);
             if (list) list.count = stocks.length;
+            showToast('移除失敗，已還原');
         }
-    } catch (error) {
-        console.error('移除股票時發生錯誤:', error);
-    }
+    }, 4000);
 }
 
 
@@ -1503,12 +1517,14 @@ async function updateStockPrices() {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
                 if (data.error) return stock;
-                return {
+                const merged = {
                     ...stock,
                     ...data,
                     company_name: data.company_name || stock.company_name,
                     logo_url: data.logo_url || stock.logo_url,
                 };
+                cacheLogoUrl(stock.ticker, merged.logo_url);
+                return merged;
             } catch {
                 return stock;
             }
@@ -1581,6 +1597,7 @@ async function loadCurrentWatchlistStocks() {
         }
     });
     stocks = ordered;
+    stocks.forEach(s => cacheLogoUrl(s.ticker, s.logo_url));
     renderStocks();
     renderSettingsStockList();
     updateStockPrices();
@@ -1631,6 +1648,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMarketClock();
     setInterval(renderMarketClock, 1000);
 
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            renderMarketClock();
+            updateStockPrices();
+            schedulePoll();
+        }
+    });
+
     // 記下目前前端版本，之後每分鐘比對一次；後端換版就自動重載，避免舊分頁打到已移除的端點
     checkAssetVersion();
     setInterval(checkAssetVersion, 60000);
@@ -1644,6 +1669,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!query) { searchResults.classList.add('hidden'); return; }
 
         if (searchTimeout) clearTimeout(searchTimeout);
+        searchResults.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-tertiary);font:400 13px/1.30 var(--font)">搜尋中…</div>';
+        searchResults.classList.remove('hidden');
 
         searchTimeout = setTimeout(async () => {
             try {
@@ -1655,7 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchResults.classList.remove('hidden');
 
                 if (!results.length) {
-                    searchResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);font:400 13px/1.30 var(--font)">找不到符合的股票</div>';
+                    searchResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);font:400 13px/1.30 var(--font)">找不到符合的股票，試試英文代號</div>';
                     return;
                 }
 
@@ -1692,6 +1719,46 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeWatchlistDrawer();
     });
+
+    // Pull-to-refresh
+    (function() {
+        const content = document.querySelector('.page-content');
+        const indicator = document.getElementById('ptrIndicator');
+        if (!content || !indicator) return;
+        let startY = 0, pulling = false, triggered = false;
+        const THRESHOLD = 60;
+
+        content.addEventListener('touchstart', (e) => {
+            if (content.scrollTop > 0) return;
+            startY = e.touches[0].clientY;
+            pulling = true;
+            triggered = false;
+        }, { passive: true });
+
+        content.addEventListener('touchmove', (e) => {
+            if (!pulling) return;
+            const dy = Math.max(0, e.touches[0].clientY - startY);
+            if (dy > 0 && content.scrollTop <= 0) {
+                const pull = Math.min(dy * 0.5, 70);
+                indicator.style.transform = 'translateY(' + pull + 'px)';
+                indicator.style.opacity = Math.min(1, pull / THRESHOLD);
+                if (pull >= THRESHOLD) triggered = true;
+            }
+        }, { passive: true });
+
+        content.addEventListener('touchend', () => {
+            if (!pulling) return;
+            pulling = false;
+            indicator.style.transform = '';
+            indicator.style.opacity = '';
+            if (triggered) {
+                indicator.classList.add('refreshing');
+                updateStockPrices().finally(() => {
+                    indicator.classList.remove('refreshing');
+                });
+            }
+        });
+    })();
 });
 
 
@@ -1814,7 +1881,7 @@ function slideToWatchlist(id, direction) {
 
 /* ═══════ TOAST ═══════ */
 
-function showToast(message) {
+function showToast(message, duration) {
     let container = document.getElementById('toastContainer');
     if (!container) {
         container = document.createElement('div');
@@ -1823,9 +1890,16 @@ function showToast(message) {
         document.body.appendChild(container);
     }
 
+    const isError = /失敗|錯誤|無法/.test(message);
+    const ms = duration || (isError ? 5000 : 3000);
+
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.textContent = message;
+    if (isError) toast.onclick = () => {
+        toast.classList.remove('visible');
+        setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
+    };
     container.appendChild(toast);
 
     requestAnimationFrame(() => { toast.classList.add('visible'); });
@@ -1833,7 +1907,38 @@ function showToast(message) {
     setTimeout(() => {
         toast.classList.remove('visible');
         setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
-    }, 3000);
+    }, ms);
+}
+
+function showUndoToast(message, onUndo) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-undo';
+    const span = document.createElement('span');
+    span.textContent = message;
+    const btn = document.createElement('button');
+    btn.className = 'undo-btn';
+    btn.textContent = '復原';
+    btn.onclick = () => {
+        if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+        onUndo();
+        toast.classList.remove('visible');
+        setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
+    };
+    toast.appendChild(span);
+    toast.appendChild(btn);
+    container.appendChild(toast);
+    requestAnimationFrame(() => { toast.classList.add('visible'); });
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => { if (toast.parentNode) container.removeChild(toast); }, 300);
+    }, 4000);
 }
 
 function escapeHtml(unsafe) {
