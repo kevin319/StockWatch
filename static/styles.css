@@ -246,24 +246,32 @@ img { display: block; max-width: 100%; }
 
 .v2-row { cursor: pointer; }
 .v2-row:active { transform: scale(0.985); }
+.watchlist-desc {
+  padding: 8px 20px 4px;
+  font: 400 12px/1.4 var(--font);
+  color: var(--text-tertiary);
+}
 .stock-item + .stock-item { border-top: 0.5px solid var(--hairline); }
 .v2-row.expanded { background: var(--well); }
 
 .group-header {
-  padding: 10px 20px 4px;
+  padding: 6px 20px 4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 6px;
+  gap: 2px 4px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
 }
 .group-header:active { opacity: 0.6; }
 .group-chevron {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
   transition: transform 0.2s ease;
   color: var(--text-tertiary);
-  flex-shrink: 0;
+  margin: -6px -8px -6px -8px;
 }
 .group-header.collapsed .group-chevron { transform: rotate(-90deg); }
 .group-header-name {
@@ -278,7 +286,7 @@ img { display: block; max-width: 100%; }
 }
 .group-header-desc {
   width: 100%;
-  padding-left: 18px;
+  padding-left: 28px;
   font: 400 11px/1.3 var(--font);
   color: var(--text-tertiary);
 }
@@ -293,6 +301,21 @@ img { display: block; max-width: 100%; }
 .detail-exit  { animation: detailExit 0.26s ease both; }
 @keyframes detailEnter { from { max-height: 0; opacity: 0; } to { max-height: 800px; opacity: 1; } }
 @keyframes detailExit  { from { max-height: 800px; opacity: 1; } to { max-height: 0; opacity: 0; } }
+
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 20px 0;
+}
+.detail-tag {
+  font: 500 11px/1 var(--font);
+  color: var(--text-secondary);
+  background: var(--well);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
 
 .detail-grid {
   display: grid;
@@ -1353,8 +1376,7 @@ body.login-body {
 .nav-title-btn {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 7px;
+  gap: 7px;
   color: var(--text);
   padding: 0;
   min-width: 0;
@@ -1362,15 +1384,6 @@ body.login-body {
 
 .nav-title-btn:active { opacity: 0.5; }
 .nav-title-btn .nav-title-caret { color: var(--text-tertiary); }
-.nav-title-desc {
-  width: 100%;
-  font: 400 11px/1.2 var(--font);
-  color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav-title-desc:empty { display: none; }
 
 .nav-arrow-btn {
   width: 28px; height: 28px;

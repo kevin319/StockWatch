@@ -101,6 +101,43 @@ def ensure_watchlist_groups() -> None:
         conn.close()
 
 
+def ensure_group_stocks_m2m() -> None:
+    """將分組從一對一（watchlist_stocks.group_id）遷移到多對多（group_stocks 關聯表）。"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS group_stocks (
+                   id SERIAL PRIMARY KEY,
+                   group_id INTEGER NOT NULL
+                       REFERENCES watchlist_groups(id) ON DELETE CASCADE,
+                   watchlist_stock_id INTEGER NOT NULL
+                       REFERENCES watchlist_stocks(id) ON DELETE CASCADE,
+                   UNIQUE (group_id, watchlist_stock_id)
+               );"""
+        )
+        cur.execute(
+            """CREATE INDEX IF NOT EXISTS idx_group_stocks_stock
+                   ON group_stocks(watchlist_stock_id);"""
+        )
+
+        # 把既有的 group_id 資料搬到 junction table（只搬未搬過的）
+        cur.execute(
+            """INSERT INTO group_stocks (group_id, watchlist_stock_id)
+               SELECT ws.group_id, ws.id
+               FROM watchlist_stocks ws
+               WHERE ws.group_id IS NOT NULL
+                 AND NOT EXISTS (
+                     SELECT 1 FROM group_stocks gs
+                     WHERE gs.group_id = ws.group_id AND gs.watchlist_stock_id = ws.id
+                 );"""
+        )
+
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
 def ensure_watchlist_subgroups() -> None:
     """建立清單內子分組機制：watchlist_groups 表 + watchlist_stocks.group_id + description 欄位。"""
     conn = get_db_connection()

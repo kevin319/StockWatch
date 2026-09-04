@@ -263,7 +263,7 @@ _STOCKS_SQL = """
     SELECT
         ws.ticker,
         ws.display_order,
-        ws.group_id,
+        gs.group_id,
         COALESCE(g.name, '') AS group_name,
         COALESCE(g.description, '') AS group_description,
         COALESCE(g.display_order, 999999) AS group_order,
@@ -278,7 +278,8 @@ _STOCKS_SQL = """
         COALESCE(sp.extended_change_percent, 0) as extended_change_percent
     FROM watchlist_stocks ws
     LEFT JOIN stock_prices sp ON ws.ticker = sp.ticker
-    LEFT JOIN watchlist_groups g ON g.id = ws.group_id
+    LEFT JOIN group_stocks gs ON gs.watchlist_stock_id = ws.id
+    LEFT JOIN watchlist_groups g ON g.id = gs.group_id
     WHERE ws.watchlist_id = %s
     ORDER BY COALESCE(g.display_order, 999999), g.id NULLS LAST, ws.display_order;
 """
@@ -491,7 +492,7 @@ def _db_list_groups(user_email: str, watchlist_id: int) -> list:
         _assert_owns(cur, user_email, watchlist_id)
         cur.execute(
             """SELECT g.id, g.name, COALESCE(g.description, '') AS description, g.display_order,
-                      (SELECT COUNT(*) FROM watchlist_stocks ws WHERE ws.group_id = g.id) AS count
+                      (SELECT COUNT(*) FROM group_stocks gs WHERE gs.group_id = g.id) AS count
                FROM watchlist_groups g
                WHERE g.watchlist_id = %s
                ORDER BY g.display_order, g.id""",
@@ -552,7 +553,7 @@ def _db_update_group(user_email: str, watchlist_id: int, group_id: int,
             f"""UPDATE watchlist_groups SET {', '.join(sets)}
                 WHERE id = %s AND watchlist_id = %s
                 RETURNING id, name, COALESCE(description, '') AS description, display_order,
-                    (SELECT COUNT(*) FROM watchlist_stocks ws WHERE ws.group_id = watchlist_groups.id) AS count""",
+                    (SELECT COUNT(*) FROM group_stocks gs WHERE gs.group_id = watchlist_groups.id) AS count""",
             params,
         )
         row = dict(cur.fetchone())
@@ -597,21 +598,26 @@ def _db_reorder_groups(user_email: str, watchlist_id: int, ids: list) -> None:
 
 
 def _db_set_group_stocks(user_email: str, watchlist_id: int, group_id: int, tickers: list) -> None:
-    """批次設定某分組包含哪些股票：勾選的設 group_id，先前屬於此分組但未勾選的歸入未分組。"""
+    """批次設定某分組包含哪些股票（多對多）：先清除此分組的關聯，再建立勾選的。"""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         _assert_group_owns(cur, user_email, watchlist_id, group_id)
-        # 原本在此分組的先全部取消
         cur.execute(
-            "UPDATE watchlist_stocks SET group_id = NULL WHERE watchlist_id = %s AND group_id = %s",
-            (watchlist_id, group_id),
+            """DELETE FROM group_stocks
+               WHERE group_id = %s
+                 AND watchlist_stock_id IN (
+                     SELECT id FROM watchlist_stocks WHERE watchlist_id = %s
+                 )""",
+            (group_id, watchlist_id),
         )
-        # 勾選的設入
         if tickers:
             cur.execute(
-                """UPDATE watchlist_stocks SET group_id = %s
-                   WHERE watchlist_id = %s AND ticker = ANY(%s)""",
+                """INSERT INTO group_stocks (group_id, watchlist_stock_id)
+                   SELECT %s, ws.id
+                   FROM watchlist_stocks ws
+                   WHERE ws.watchlist_id = %s AND ws.ticker = ANY(%s)
+                   ON CONFLICT DO NOTHING""",
                 (group_id, watchlist_id, tickers),
             )
         conn.commit()
@@ -626,8 +632,12 @@ def _db_get_group_stocks(user_email: str, watchlist_id: int, group_id: int) -> l
     try:
         _assert_group_owns(cur, user_email, watchlist_id, group_id)
         cur.execute(
-            "SELECT ticker FROM watchlist_stocks WHERE watchlist_id = %s AND group_id = %s ORDER BY display_order",
-            (watchlist_id, group_id),
+            """SELECT ws.ticker
+               FROM group_stocks gs
+               JOIN watchlist_stocks ws ON ws.id = gs.watchlist_stock_id
+               WHERE gs.group_id = %s AND ws.watchlist_id = %s
+               ORDER BY ws.display_order""",
+            (group_id, watchlist_id),
         )
         return [r[0] for r in cur.fetchall()]
     finally:

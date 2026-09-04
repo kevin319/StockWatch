@@ -3,6 +3,15 @@ function _fmtNum(v, ticker) {
     return Number(v).toFixed(2);
 }
 
+function _fmtChange(v, ticker, price) {
+    if (ticker && ticker.includes('=X') && price != null) {
+        var ps = _fmtNum(price, ticker);
+        var dp = ps.includes('.') ? ps.split('.')[1].length : 0;
+        return Number(v).toFixed(dp);
+    }
+    return _fmtNum(v, ticker);
+}
+
 /* ═══════ 認證後的 API 呼叫 ═══════ */
 
 // 所有需要登入的後端呼叫都走這裡：自動帶上 Bearer token；
@@ -384,40 +393,46 @@ function renderStocks() {
         return;
     }
 
-    let lastGroupId = undefined;
-    const hasAnyGroup = stocks.some(s => s.group_id);
-    let groupIndex = 0;
+    const wl = typeof getCurrentWatchlist === 'function' ? getCurrentWatchlist() : null;
+    if (wl && wl.description) {
+        const descDiv = document.createElement('div');
+        descDiv.className = 'watchlist-desc';
+        descDiv.textContent = wl.description;
+        stockList.appendChild(descDiv);
+    }
 
-    stocks.forEach((stock, index) => {
-        // 分組標題列
-        if (hasAnyGroup && stock.group_id !== lastGroupId) {
-            lastGroupId = stock.group_id;
-            const groupKey = stock.group_id || '_ungrouped';
-            if (!(groupKey in collapsedGroups)) {
-                const mode = groupCollapseMode();
-                collapsedGroups[groupKey] = mode === 'first-open' ? groupIndex > 0 : false;
+    const hasAnyGroup = stocks.some(s => s.groups && s.groups.length);
+
+    // 建立分組渲染清單：[{groupKey, label, desc, stocks:[...]}, ...]
+    var groupedRender = [];
+    if (hasAnyGroup) {
+        var groupMap = {};
+        var groupOrder = [];
+        stocks.forEach(function(stock) {
+            if (stock.groups && stock.groups.length) {
+                stock.groups.forEach(function(g) {
+                    if (!groupMap[g.id]) {
+                        groupMap[g.id] = { groupKey: g.id, label: g.name, desc: g.description || '', order: g.order, stocks: [] };
+                        groupOrder.push(groupMap[g.id]);
+                    }
+                    groupMap[g.id].stocks.push(stock);
+                });
+            } else {
+                if (!groupMap['_ungrouped']) {
+                    groupMap['_ungrouped'] = { groupKey: '_ungrouped', label: '未分組', desc: '', order: 999999, stocks: [] };
+                    groupOrder.push(groupMap['_ungrouped']);
+                }
+                groupMap['_ungrouped'].stocks.push(stock);
             }
-            const isCollapsed = collapsedGroups[groupKey];
-            const hdr = document.createElement('div');
-            hdr.className = 'group-header' + (isCollapsed ? ' collapsed' : '');
-            const label = stock.group_id ? stock.group_name : '未分組';
-            const desc = stock.group_id ? (stock.group_description || '') : '';
-            const count = stocks.filter(s => (s.group_id || '_ungrouped') === groupKey).length;
-            hdr.innerHTML = `<svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`
-                + `<span class="group-header-name">${escapeHtml(label)}</span>`
-                + `<span class="group-header-count">${count}</span>`
-                + (desc ? `<span class="group-header-desc">${escapeHtml(desc)}</span>` : '');
-            hdr.addEventListener('click', () => toggleGroupCollapse(groupKey));
-            stockList.appendChild(hdr);
-            groupIndex++;
-        }
+        });
+        groupOrder.sort(function(a, b) { return a.order - b.order; });
+        groupedRender = groupOrder;
+    }
 
-        if (hasAnyGroup) {
-            const groupKey = stock.group_id || '_ungrouped';
-            if (collapsedGroups[groupKey]) return;
-        }
+    var renderIndex = 0;
+    function appendStock(stock) {
 
-        // 平盤（漲跌趨近 0）中性灰、不帶正負號——+0.00% 標紅是資訊謊言
+        var index = renderIndex++;
         const flat = Math.abs(stock.price_change_percent) < 0.005;
         const up = stock.price_change >= 0;
         const changeClass = flat ? 'price-flat' : (up ? 'price-up' : 'price-down');
@@ -454,7 +469,7 @@ function renderStocks() {
                 <span class="price-change ${changeClass}">${arrow}${stock.price_change_percent.toFixed(2)}%</span>
                 ${hasExtended
                     ? `<span class="ext-change ${extClass}">${extArrow}${stock.extended_change_percent.toFixed(2)}%</span>`
-                    : `<span class="ext-change ${changeClass}">${arrow}${_fmtNum(stock.price_change, stock.ticker)}</span>`}
+                    : `<span class="ext-change ${changeClass}">${arrow}${_fmtChange(stock.price_change, stock.ticker, stock.price)}</span>`}
             </div>`;
         row.addEventListener('click', () => toggleExpand(stock.ticker));
         item.appendChild(row);
@@ -468,7 +483,29 @@ function renderStocks() {
         }
 
         stockList.appendChild(item);
-    });
+    }
+
+    if (hasAnyGroup) {
+        groupedRender.forEach(function(grp, gi) {
+            var groupKey = grp.groupKey;
+            if (!(groupKey in collapsedGroups)) {
+                var mode = groupCollapseMode();
+                collapsedGroups[groupKey] = mode === 'first-open' ? gi > 0 : false;
+            }
+            var isCollapsed = collapsedGroups[groupKey];
+            var hdr = document.createElement('div');
+            hdr.className = 'group-header' + (isCollapsed ? ' collapsed' : '');
+            hdr.innerHTML = `<span class="group-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>`
+                + `<span class="group-header-name">${escapeHtml(grp.label)}</span>`
+                + `<span class="group-header-count">${grp.stocks.length}</span>`
+                + (grp.desc ? `<span class="group-header-desc">${escapeHtml(grp.desc)}</span>` : '');
+            hdr.addEventListener('click', function() { toggleGroupCollapse(groupKey); });
+            stockList.appendChild(hdr);
+            if (!isCollapsed) grp.stocks.forEach(appendStock);
+        });
+    } else {
+        stocks.forEach(appendStock);
+    }
 
     firstStockRender = false;
     expandAnimate = false; // 展開動畫只播一次
@@ -589,6 +626,12 @@ function fundamentalsHtml(ticker) {
     const moneyNZ = v => (v == null || isNaN(v) || v === 0) ? '—' : Number(v).toFixed(2);
     const pct = v => (v == null || isNaN(v) || v === 0) ? '—' : Number(v).toFixed(2) + '%';
 
+    var tags = '';
+    if (d.sector || d.industry) {
+        const items = [d.sector, d.industry].filter(Boolean);
+        tags = `<div class="detail-tags">${items.map(t => `<span class="detail-tag">${escapeHtml(t)}</span>`).join('')}</div>`;
+    }
+
     const cells = [
         ['本益比', ratio(d.pe)],      ['股息', moneyNZ(d.dividend)],
         ['股價淨值比', ratio(d.pb)],  ['殖利率', pct(d.divYield)],
@@ -598,7 +641,7 @@ function fundamentalsHtml(ticker) {
         ? `<div class="detail-grid">${cells.map(([k, v]) =>
             `<div class="metric"><div class="metric-label">${k}</div><div class="metric-value">${v}</div></div>`).join('')}</div>`
         : '';
-    return grid + week52RangeHtml(ticker, d);
+    return tags + grid + week52RangeHtml(ticker, d);
 }
 
 // 52 週區間位置條：現價在高低點之間的落點，一眼看出相對位置
@@ -1518,7 +1561,26 @@ async function loadCurrentWatchlistStocks() {
     const data = await response.json();
     if (currentWatchlistId !== requestedWatchlistId) return; // 已切到別的清單，這筆回應過期了
 
-    stocks = data;
+    // 後端多對多分組：同一 ticker 可能出現多列（每個分組一列），合併成 groups 陣列
+    var byTicker = {};
+    var ordered = [];
+    data.forEach(function(row) {
+        if (!byTicker[row.ticker]) {
+            var stock = Object.assign({}, row);
+            stock.groups = [];
+            byTicker[row.ticker] = stock;
+            ordered.push(stock);
+        }
+        if (row.group_id) {
+            byTicker[row.ticker].groups.push({
+                id: row.group_id,
+                name: row.group_name,
+                description: row.group_description,
+                order: row.group_order,
+            });
+        }
+    });
+    stocks = ordered;
     renderStocks();
     renderSettingsStockList();
     updateStockPrices();

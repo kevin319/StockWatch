@@ -421,6 +421,8 @@ async def get_fundamentals(ticker: str, _: str = Depends(current_user_email)):
         mixed_ccy = bool(cur and fin_cur and cur != fin_cur)
         data = {
             "ticker": ticker,
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
             "pe": info.get("trailingPE"),
             "pb": None if mixed_ccy else info.get("priceToBook"),
             "ps": None if mixed_ccy else info.get("priceToSalesTrailing12Months"),
