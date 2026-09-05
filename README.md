@@ -76,6 +76,23 @@ Multiple watchlists with drag-to-reorder and cross-list organization. Search by 
 
 **認證 / Auth** — Google OAuth 2.0 登入，自簽 JWT 長效 token（30 天），所有 API 端點需登入。
 
+### 對外入口不在本 repo
+
+正式部署時，TLS 與反向代理由 **`git/ArtifactsViewer`** 的 Docker Caddy 提供——
+那是這台 Mac 唯一的對外入口，同時服務 artifacts-viewer、jobhub、investforlife-web。
+
+```
+外網 ──443──> [router] ──> Docker Caddy ──> stockwatch-stockwatch-1:8000
+                          (ArtifactsViewer repo)
+```
+
+本 repo 的 `docker-compose.yml` 透過 external network `artifactsviewer_default`
+（在 compose 中別名為 `caddy_net`）加入該網路，容器名稱 `stockwatch-stockwatch-1`
+是 Caddy 設定裡寫死的目標。**改容器名稱或 network 設定會讓對外服務斷線**，
+對應的 Caddyfile 在 `ArtifactsViewer/Caddyfile`。
+
+`127.0.0.1:8200` 是本機 debug 用的直連 port，不對外。
+
 ---
 
 ## 快速開始 / Quick Start
