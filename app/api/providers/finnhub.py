@@ -9,16 +9,17 @@ _company_cache = {}
 _ET = ZoneInfo("America/New_York")
 
 def _us_market_state() -> str:
-    """根據美東時間判斷美股市場狀態。"""
+    """根據美東時間判斷美股市場狀態。
+    收盤邊界加 3 分鐘緩衝，避免 Docker 時鐘偏差提前判定 POST。"""
     now = datetime.now(_ET)
     if now.weekday() >= 5:
         return "CLOSED"
     t = now.hour * 60 + now.minute
-    if 570 <= t < 960:     # 9:30-16:00
+    if 570 <= t < 963:     # 9:30-16:03（含 3 分鐘緩衝）
         return "REGULAR"
     if 240 <= t < 570:     # 4:00-9:30
         return "PRE"
-    if 960 <= t < 1200:    # 16:00-20:00
+    if 963 <= t < 1200:    # 16:03-20:00
         return "POST"
     return "CLOSED"
 

@@ -88,7 +88,7 @@ _UPSERT_STOCK_SQL = """
         price_change = EXCLUDED.price_change,
         price_change_percent = EXCLUDED.price_change_percent,
         company_name = EXCLUDED.company_name,
-        logo_url = EXCLUDED.logo_url,
+        logo_url = COALESCE(EXCLUDED.logo_url, stock_prices.logo_url),
         market_state = EXCLUDED.market_state,
         extended_price = EXCLUDED.extended_price,
         extended_type = EXCLUDED.extended_type,
@@ -96,6 +96,18 @@ _UPSERT_STOCK_SQL = """
         extended_change_percent = EXCLUDED.extended_change_percent,
         updated_at = NOW();
 """
+
+
+def _db_get_company_name(ticker: str) -> str | None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT company_name FROM stock_prices WHERE ticker = %s", (ticker,))
+        row = cur.fetchone()
+        return row[0] if row and row[0] else None
+    finally:
+        cur.close()
+        conn.close()
 
 
 def _db_upsert_stock_price(data: dict) -> None:
@@ -180,6 +192,12 @@ async def get_stock_price(ticker: str, _: str = Depends(current_user_email)):
                 logo_url = info.get('logo_url') or info.get('logoUrl')
 
                 company_name = info.get('longName', '') or info.get('shortName', '')
+
+                # yfinance 對非美股只有英文名；如果 DB 已存中文名（來自 TWSE/AStock），保留它
+                if ticker_upper.endswith(('.TW', '.TWO', '.HK', '.SS', '.SZ')):
+                    existing = _db_get_company_name(ticker)
+                    if existing:
+                        company_name = existing
 
                 # 獲取市場狀態和交易價格
                 market_state = info.get('marketState', '')

@@ -501,9 +501,17 @@ function renderStocks() {
             var isCollapsed = collapsedGroups[groupKey];
             var hdr = document.createElement('div');
             hdr.className = 'group-header' + (isCollapsed ? ' collapsed' : '');
+            var validPcts = grp.stocks.map(s => s.price_change_percent).filter(v => typeof v === 'number' && isFinite(v));
+            var avgPct = validPcts.length ? validPcts.reduce((a, b) => a + b, 0) / validPcts.length : null;
+            var avgHtml = '';
+            if (avgPct !== null) {
+                var cls = avgPct > 0 ? 'price-up' : avgPct < 0 ? 'price-down' : '';
+                avgHtml = `<span class="group-header-avg ${cls}">${avgPct > 0 ? '+' : ''}${avgPct.toFixed(2)}%</span>`;
+            }
             hdr.innerHTML = `<span class="group-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>`
                 + `<span class="group-header-name">${escapeHtml(grp.label)}</span>`
                 + `<span class="group-header-count">${grp.stocks.length}</span>`
+                + avgHtml
                 + (grp.desc ? `<span class="group-header-desc">${escapeHtml(grp.desc)}</span>` : '');
             hdr.addEventListener('click', function() { toggleGroupCollapse(groupKey); });
             stockList.appendChild(hdr);

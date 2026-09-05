@@ -286,6 +286,11 @@ img { display: block; max-width: 100%; }
   font: 400 11px/1.2 var(--font);
   color: var(--text-quaternary);
 }
+.group-header-avg {
+  font: 600 11px/1.2 var(--font);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
 .group-header-desc {
   width: 100%;
   padding-left: 28px;
