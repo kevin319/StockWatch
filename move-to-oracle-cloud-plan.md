@@ -1,5 +1,11 @@
 # StockWatch 搬遷 Oracle Cloud 計畫
 
+> **已於 2026-09-07 完成。** VM: `158.101.150.86`（ap-tokyo-1，A1.Flex 1 OCPU / 6 GB）。
+> 實際執行紀錄、部署腳本與維運方式見 `git/cloud-deploy/README.md`。
+> 實作與原計畫的主要差異：改用 GitHub Actions 自動 build arm64 image 推到
+> ghcr.io，VM 只負責 pull —— 原計畫的「VM 上 clone repo 再 build」已廢棄
+> （1 OCPU build 太慢，且需把 git 憑證放上雲端）。
+
 ## 目標
 
 把 Mac Docker Desktop 上的 3 個對外服務 + 1 個 DB 搬到 Oracle Cloud Always Free ARM VM，解決：
@@ -73,15 +79,15 @@ Internet (HTTPS :443)
 
 ## 檔案結構（VM 上）
 
+實際結果（**沒有任何原始碼**——image 由 GitHub Actions build 後推到 ghcr.io）：
+
 ```
 ~/cloud/
-├── docker-compose.yml    # 統一編排所有服務 + Caddy
+├── docker-compose.yml    # 統一編排所有服務 + Caddy，用 image: 不用 build:
 ├── Caddyfile             # 反向代理設定
-├── .env                  # 所有密鑰
-├── stockwatch/           # git clone
-├── investforlife-web/    # git clone
-├── mr-market-/           # git clone
-└── backups/              # StockWatch DB 備份
+├── .env                  # 所有密鑰（600）
+├── backups/              # StockWatch DB 排程備份
+└── mr-market-data/       # mr-market 的 SQLite + JSON
 ```
 
 ## 執行步驟
@@ -91,7 +97,7 @@ Internet (HTTPS :443)
 1. 註冊 cloud.oracle.com（需信用卡驗證，不扣款）
 2. Home Region 選 Japan East (Tokyo)
 3. Mac 產生 SSH key：`ssh-keygen -t ed25519 -f ~/.ssh/oracle_cloud`
-4. 建立 ARM VM（2 OCPU / 12GB / 50GB / Ubuntu 22.04）
+4. 建立 ARM VM（1 OCPU / 6GB / 預設 boot volume / Ubuntu 22.04 aarch64）
 5. OCI Security List 開 Ingress 80, 443
 6. SSH 進去開 OS 層 iptables 80, 443
 
