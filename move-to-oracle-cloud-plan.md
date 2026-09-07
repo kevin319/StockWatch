@@ -33,14 +33,22 @@
 | 服務 | 原因 |
 |------|------|
 | artifacts-viewer | 依賴本機 Obsidian vault（唯讀掛載） |
-| Caddy (Mac) | 繼續服務 artifacts-viewer |
+| jobhub | launchd 原生服務，管理本機排程與 job 執行 |
+| Caddy (Mac) | 繼續服務上面兩個 |
+
+兩者都已在 2026-09-05 完成 HTTPS 化（`artifacts.` / `jobhub.investforlife.fun`），
+DNS 維持指向家用 IP，切換雲端時不要動這兩筆記錄。
 
 ## Oracle Cloud VM 規格
 
 - **Shape**: VM.Standard.A1.Flex（ARM / Ampere A1）
-- **OCPU**: 2（免費額度上限）
-- **RAM**: 12 GB（免費額度上限）
-- **Boot Volume**: 50 GB
+- **OCPU**: 1
+- **RAM**: 6 GB
+- **Boot Volume**: 預設 46.6 GB（夠用，且不動 custom 設定就不會誤選到收費的 VPU 等級）
+
+> 免費額度上限是 4 OCPU / 24 GB，但 2/12 常態性 `Out of capacity`。
+> 改用 1/6 排到的機率高很多，實測五個容器只吃約 1 GB RAM。
+> 日後可關機 resize 升級。
 - **OS**: Ubuntu 22.04 (aarch64)
 - **Home Region**: Japan East (Tokyo)，對台灣延遲 ~30-40ms
 
@@ -54,7 +62,7 @@ Internet (HTTPS :443)
     │
     ├─ stock.domain.com    → stockwatch:8000 ──→ PostgreSQL :5432
     ├─ invest.domain.com   → investforlife:80
-    └─ market.domain.com   → mr-market:8080  ──→ SQLite (data/market.db)
+    └─ mrmarket.domain.com → mr-market:8080  ──→ SQLite (data/market.db)
 ```
 
 - 對外只開 port 443（+ 80 給 HTTP→HTTPS 重導向）
