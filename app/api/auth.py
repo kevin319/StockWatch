@@ -111,10 +111,10 @@ async def sso_login(token: str):
         {"email": user["email"], "name": user["name"], "picture": user["picture_url"]},
         ensure_ascii=False,
     )
-    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+    return HTMLResponse(f"""<!DOCTYPE html><html style="background:#000"><head><meta charset="utf-8"></head><body><script>
 localStorage.setItem('access_token','{access_token}');
 localStorage.setItem('user_info',{json.dumps(user_info)});
-window.location.href='/home';
+window.location.href='/home?_v={int(__import__('time').time())}';
 </script></body></html>""")
 
 
