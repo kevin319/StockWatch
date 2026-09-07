@@ -311,11 +311,12 @@ function getMarketClockInfo(market) {
     return { open: false, countdownMin: null };
 }
 
-// 倒數帶中文單位——「12:28」會被誤讀成時刻，「12時28分」不會
+// 倒數一律 HH:MM。與其下方顯示的開盤時刻同為冒號格式，靠副標的「開」字區分：
+// 主行是還要等多久，副標是幾點開。
 function formatCountdown(min) {
     const h = Math.floor(min / 60);
     const m = min % 60;
-    return h > 0 ? `${h}時${m}分` : `${m}分`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function renderMarketClock() {
@@ -505,7 +506,7 @@ function renderStocks() {
             var avgPct = validPcts.length ? validPcts.reduce((a, b) => a + b, 0) / validPcts.length : null;
             var avgHtml = '';
             if (avgPct !== null) {
-                var cls = avgPct > 0 ? 'price-up' : avgPct < 0 ? 'price-down' : '';
+                var cls = avgPct > 0 ? 'price-up' : avgPct < 0 ? 'price-down' : 'price-flat';
                 avgHtml = `<span class="group-header-avg ${cls}">${avgPct > 0 ? '+' : ''}${avgPct.toFixed(2)}%</span>`;
             }
             hdr.innerHTML = `<span class="group-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>`

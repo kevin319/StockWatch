@@ -36,6 +36,7 @@ html {
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--page);
 }
 
 body {
@@ -290,6 +291,17 @@ img { display: block; max-width: 100%; }
   font: 600 11px/1.2 var(--font);
   font-variant-numeric: tabular-nums;
   margin-left: auto;
+  padding: 2.5px 8px;
+  border-radius: var(--radius-pill);
+  /* 半透明遮罩讓分組平均一眼就跟個股的漲跌數字分開：個股是純文字，分組是膠囊。
+     用 currentColor 混色，紅漲綠跌的語意會自動跟著走，不需要為每種狀態各寫一條。
+     不支援 color-mix 時退回中性的 --well，仍保有膠囊形狀的區隔。 */
+  background: var(--well);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+/* 深色底上的半透明色會顯得更弱，補一點濃度 */
+[data-theme="dark"] .group-header-avg {
+  background: color-mix(in srgb, currentColor 20%, transparent);
 }
 .group-header-desc {
   width: 100%;
