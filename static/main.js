@@ -141,13 +141,13 @@ function updateGroupToggleBtn() {
     var down = btn.querySelector('.gt-down');
     if (anyOpen) {
         // 下一步是收合：箭頭朝內，往中線靠攏
-        up.setAttribute('points', '7 3 12 8 17 3');
-        down.setAttribute('points', '7 21 12 16 17 21');
+        up.setAttribute('points', '6 3 12 9 18 3');
+        down.setAttribute('points', '6 21 12 15 18 21');
         btn.setAttribute('aria-label', '全部收合');
     } else {
         // 下一步是展開：箭頭朝外，從中線散開
-        up.setAttribute('points', '7 8 12 3 17 8');
-        down.setAttribute('points', '7 16 12 21 17 16');
+        up.setAttribute('points', '6 9 12 3 18 9');
+        down.setAttribute('points', '6 15 12 21 18 15');
         btn.setAttribute('aria-label', '全部展開');
     }
 }

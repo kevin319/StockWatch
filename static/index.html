@@ -38,10 +38,13 @@
             <button class="nav-icon-btn" id="navGroupToggle" onclick="toggleAllGroups()" aria-label="全部展開／收合" hidden>
                 <!-- 中線是必要的：沒有它，兩個朝內的箭頭在 22px 下會合成 ✕ 的形狀，
                      被誤讀成關閉按鈕。有中線才讀得出「向中線收合／從中線展開」。 -->
+                <!-- 墨跡寬度對齊鄰居（x 3→21，與對話圖示同寬）。
+                     早期版本只有 x 5→19，在 34px 按鈕裡顯得縮成一團，
+                     周圍留白比左右鄰居多，看起來像沒對齊。 -->
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline class="gt-up" points="7 8 12 3 17 8"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                    <polyline class="gt-down" points="7 16 12 21 17 16"/>
+                    <polyline class="gt-up" points="6 9 12 3 18 9"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <polyline class="gt-down" points="6 15 12 21 18 15"/>
                 </svg>
             </button>
             <button class="nav-icon-btn" onclick="toggleSettingsPage()" aria-label="設置">

@@ -133,6 +133,11 @@ img { display: block; max-width: 100%; }
   align-items: center;
   gap: 18px;
   margin-left: auto;
+  /* 光學對齊：圖示被包在 34px 圓形按鈕裡（22px SVG 置中，每側內縮 6px），
+     左側的 ☰ 沒有這層，所以同樣 20px padding 下右邊看起來多縮約 5px。
+     用負邊距抵銷內距，讓兩側墨跡等距。不改 nav-top 的 padding —— 那會把
+     觸控區推到太靠近螢幕邊緣。 */
+  margin-right: -5px;
 }
 
 .nav-icon-btn {
