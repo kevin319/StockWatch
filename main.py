@@ -160,7 +160,10 @@ def _compute_asset_version() -> str:
     """
     import hashlib
     h = hashlib.sha256()
-    for name in ("static/index.html", "static/main.js", "static/watchlists.js"):
+    # styles.css 也要算進來：純 CSS 的修改不會動到其他三個檔案，版號就不會變，
+    # 於是 checkAssetVersion() 不會觸發 reload，長駐的 standalone PWA 會一直
+    # 停在舊樣式上 —— 改了樣式卻「看起來完全沒變」就是這樣來的。
+    for name in ("static/index.html", "static/main.js", "static/watchlists.js", "static/styles.css"):
         try:
             with open(name, "rb") as f:
                 h.update(f.read())

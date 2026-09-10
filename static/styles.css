@@ -102,7 +102,11 @@ img { display: block; max-width: 100%; }
   top: 0;
   left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 430px;
-  padding: calc(var(--safe-top) + 10px) 20px 10px;
+  /* 水平內距跟著全頁的 16px 網格：.page-content、.hero-card、.settings-section
+     的邊緣在 430 寬下都落在 x=16 / x=414，那是螢幕上唯一一條貫穿全頁的垂直線。
+     先前是 20px，nav 是全頁唯一走 20px 的元件，圖示墨跡因此比每張卡片的邊緣
+     內縮 5.2~5.6px —— 使用者說的「沒貼齊右邊」就是對到這條線。 */
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
   background: var(--nav-bg);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
@@ -131,13 +135,23 @@ img { display: block; max-width: 100%; }
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  /* 以下兩個值都在處理同一件事：CSS 排的是「盒」，眼睛看的是「墨跡」。
+
+     一、gap 是盒間距。按鈕 34px 但裡面只有 22px SVG，每側先吃掉 6px 看不見的
+     死區，所以墨跡間距 = pitch − 兩側墨跡外延，而 pitch = 按鈕寬 + gap。
+     舊的 gap:18px → pitch 52 → 墨跡間距 34px；同一條 nav 左側（☰／清單名／▾／
+     時間）的墨跡間距只有 8.6~12.4px，右側整整鬆了 3.6 倍 —— 這才是「收合圖示
+     沒緊貼設定」的成因。gap:0 → pitch 34 → 墨跡間距 14~16px，按鈕彼此不重疊，
+     34px 觸控區完全不變。注意按鈕寬與 gap 只透過兩者之和生效：把按鈕改成 44px
+     再配 gap 8 是同一個 pitch，間距一點都不會變。
+
+     二、負邊距抵銷的是那 6px 死區，目標是讓「墨跡」落在 x=414 那條網格線上，
+     不是讓「按鈕盒」落在上面。舊值 -5px 剛好把按鈕盒右緣推到 415≈414，於是
+     bbox 量測顯示已對齊，墨跡卻仍停在 408.8 —— 量測說修好、眼睛說沒變就是
+     這個原因。-6px 把設定圖示的墨跡右緣送到 413.8。 */
+  gap: 0;
   margin-left: auto;
-  /* 光學對齊：圖示被包在 34px 圓形按鈕裡（22px SVG 置中，每側內縮 6px），
-     左側的 ☰ 沒有這層，所以同樣 20px padding 下右邊看起來多縮約 5px。
-     用負邊距抵銷內距，讓兩側墨跡等距。不改 nav-top 的 padding —— 那會把
-     觸控區推到太靠近螢幕邊緣。 */
-  margin-right: -5px;
+  margin-right: -6px;
 }
 
 .nav-icon-btn {
@@ -856,7 +870,10 @@ img { display: block; max-width: 100%; }
 
 .sheet-nav {
   position: sticky; top: 0;
-  padding: calc(var(--safe-top) + 10px) 20px 10px;
+  /* 與 .nav-top 同步收斂到 16px 網格。只改主導覽會讓兩條同款 bar 差 4px，
+     使用者切到設定頁就會看到返回鍵比底下的卡片多內縮一截。
+     這裡沒有 .nav-top 的死區問題：內容是文字，墨跡直接從 padding 起算。 */
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
   background: var(--page);
   z-index: 10;
   display: flex; align-items: center;
