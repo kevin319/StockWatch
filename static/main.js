@@ -117,6 +117,41 @@ function toggleGroupCollapse(groupKey) {
     renderStocks();
 }
 
+// 目前畫面上有哪些分組（每次 renderStocks 更新）。沒有分組時為空陣列。
+var currentGroupKeys = [];
+
+// 只要還有任一組是展開的就全部收合；全都收合了才全部展開。
+// 單一規則，不需要另外記「上次按的是展開還是收合」。
+function toggleAllGroups() {
+    if (!currentGroupKeys.length) return;
+    var anyOpen = currentGroupKeys.some(function(k) { return !collapsedGroups[k]; });
+    currentGroupKeys.forEach(function(k) { collapsedGroups[k] = anyOpen; });
+    renderStocks();
+}
+
+function updateGroupToggleBtn() {
+    var btn = document.getElementById('navGroupToggle');
+    if (!btn) return;
+    // 沒有分組時這個按鈕沒有意義，藏起來——否則按了不會有任何反應
+    btn.hidden = currentGroupKeys.length === 0;
+    if (btn.hidden) return;
+
+    var anyOpen = currentGroupKeys.some(function(k) { return !collapsedGroups[k]; });
+    var up = btn.querySelector('.gt-up');
+    var down = btn.querySelector('.gt-down');
+    if (anyOpen) {
+        // 下一步是收合：箭頭朝內，往中線靠攏
+        up.setAttribute('points', '7 3 12 8 17 3');
+        down.setAttribute('points', '7 21 12 16 17 21');
+        btn.setAttribute('aria-label', '全部收合');
+    } else {
+        // 下一步是展開：箭頭朝外，從中線散開
+        up.setAttribute('points', '7 8 12 3 17 8');
+        down.setAttribute('points', '7 16 12 21 17 16');
+        btn.setAttribute('aria-label', '全部展開');
+    }
+}
+
 function updateThemeToggle(theme) {
     var toggle = document.getElementById('themeToggle');
     if (!toggle) return;
@@ -493,6 +528,9 @@ function renderStocks() {
     }
 
     if (hasAnyGroup) {
+        // 記下這次渲染有哪些組，全展/全合按鈕才知道要操作誰。
+        // 不能只遍歷 collapsedGroups 既有的 key —— 那會漏掉還沒被互動過的組。
+        currentGroupKeys = groupedRender.map(function(g) { return g.groupKey; });
         groupedRender.forEach(function(grp, gi) {
             var groupKey = grp.groupKey;
             if (!(groupKey in collapsedGroups)) {
@@ -519,8 +557,10 @@ function renderStocks() {
             if (!isCollapsed) grp.stocks.forEach(appendStock);
         });
     } else {
+        currentGroupKeys = [];
         stocks.forEach(appendStock);
     }
+    updateGroupToggleBtn();
 
     firstStockRender = false;
     expandAnimate = false; // 展開動畫只播一次

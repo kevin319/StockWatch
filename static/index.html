@@ -32,6 +32,15 @@
         </button>
         <span class="nav-update" id="lastUpdateTime">--:--:--</span>
         <div class="nav-actions">
+            <button class="nav-icon-btn" id="navGroupToggle" onclick="toggleAllGroups()" aria-label="全部展開／收合" hidden>
+                <!-- 中線是必要的：沒有它，兩個朝內的箭頭在 22px 下會合成 ✕ 的形狀，
+                     被誤讀成關閉按鈕。有中線才讀得出「向中線收合／從中線展開」。 -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline class="gt-up" points="7 8 12 3 17 8"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline class="gt-down" points="7 16 12 21 17 16"/>
+                </svg>
+            </button>
             <button class="nav-icon-btn" id="navChatBtn" onclick="toggleChatWindow()" aria-label="AI 助理">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </button>
