@@ -32,6 +32,12 @@
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* hidden 屬性必須贏過元件自己的 display。瀏覽器預設樣式表的
+   [hidden]{display:none} 優先級極低，任何 .foo{display:flex} 都會蓋掉它，
+   結果是設了 hidden 卻照樣顯示。這個坑在 .nav-arrow-btn 上踩過一次，
+   改成全域規則避免每個元件各補一條。 */
+[hidden] { display: none !important; }
+
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
@@ -1446,7 +1452,7 @@ body.login-body {
   transition: background 0.15s;
 }
 .nav-arrow-btn:active { background: var(--well); }
-.nav-arrow-btn[hidden] { display: none; }
+/* [hidden] 由檔案開頭的全域規則處理，這裡不再重複 */
 @media (hover: none) { .nav-arrow-btn { display: none !important; } }
 
 
